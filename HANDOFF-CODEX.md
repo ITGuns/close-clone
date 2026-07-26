@@ -1,8 +1,11 @@
 # Handoff → Codex
 
 **Repo:** `D:\CODE\NEW\close-clone` · branch `main` (always work on `main`; it is the deploy source)
-**As of:** 2026-07-20, HEAD `87e5d2e`, working tree clean, everything pushed.
-**Suite:** 1,338 web tests green · ~1,719 api tests green · typecheck/eslint/prettier clean.
+**As of:** 2026-07-20. `main` is SHARED — another agent session (Codex) is pushing to it too; the
+`D-057` audit-finish pass (combobox primitive, dependency-advisory upgrades, deploy fixes) landed while
+this file was being written. **Always `git fetch && git rebase origin/main` before you start**, and
+re-read `STATUS.md` + the tail of `DECISIONS.md` (latest entry `D-058`) for the true current state
+rather than trusting any test count written here.
 
 Read this file, then `CLAUDE.md` (operating rules), then `CONTRACTS.md` (the law) before touching code.
 
@@ -118,7 +121,7 @@ There is a `.claude/launch.json` entry `web-mock` (port 5199) used for browser v
 - **Compliance rails live in the engine layer**, re-checked _inside_ the send transaction
   (`apps/api/src/services/sequences/dispatch.ts`). No API bypass (I-RAIL-API).
 - **`CONTRACTS.md` is the interface.** Additive changes only, bump the version, log the decision in
-  `DECISIONS.md` (latest is **D-056**; append, never renumber).
+  `DECISIONS.md` (append, never renumber — check the tail for the latest number).
 - **Prove it or it isn't done.** Ship the tests; no green, no done; verify UI in a real browser.
 - **No secrets in code or logs.** Strict TypeScript: no `any`, no `@ts-ignore`, no committed `TODO`.
 - Keep `STATUS.md` / `DECISIONS.md` current and committed on `main`.
@@ -134,8 +137,7 @@ There is a `.claude/launch.json` entry `web-mock` (port 5199) used for browser v
   (`HUMAN_TODO.md` has the full list).
 - Delete two stale projects (`switchboard-demo`, `switchboard-crm-demo`) left on the **former** Vercel
   account `pdvillorente12-1736`; their old URLs still serve outdated copies.
-- The git remote still points at `github.com/ITGuns/close-clone` and GitHub 301-redirects it to
-  `pllxrgn-ui/close-clone`; the local remote should be repointed to the canonical URL.
+- ~~Repoint the git remote~~ — done: `origin` is now `github.com/pllxrgn-ui/close-clone`.
 
 **Known accepted gaps (documented, not bugs to "discover"):**
 
@@ -145,6 +147,7 @@ There is a `.claude/launch.json` entry `web-mock` (port 5199) used for browser v
   (below WCAG AA for text), a few sub-24px tap targets, and compliance-block toasts that fade after 4s
   when they are the only explanation for a refused action.
 
-A full multi-dimension audit (compliance, security, web state, docs, build, tests) was run on
-2026-07-20; its findings are the current work queue — check the latest entries in `DECISIONS.md` and
-`STATUS.md` for what has since been fixed.
+**Concurrency warning.** Because two agent sessions share `main`, assume anything below may already be
+fixed. A six-dimension audit (compliance rails, security, web state/persistence, doc drift, build/deploy,
+test health) was run on 2026-07-20 in parallel with the `D-057` pass; before acting on any finding,
+verify it still reproduces on the current tree.
