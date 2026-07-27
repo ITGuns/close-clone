@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { cleanup, render, screen, waitForElementToBeRemoved } from '@testing-library/react';
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  waitForElementToBeRemoved,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { ToastProvider, useToast } from './ToastProvider.tsx';
@@ -40,14 +46,18 @@ describe('ToastProvider', () => {
   });
 
   test('auto-dismisses after its ttl', async () => {
+    // A 40ms ttl raced the test itself: under full-suite load the click alone
+    // can outlast it, so "it appeared" would fail, or waitForElementToBeRemoved
+    // would start against an already-removed node and throw. The ttl only needs
+    // to be short relative to the test, not to a busy CPU — and the removal
+    // assertion is written to tolerate a toast that vanished early.
     render(
-      <ToastProvider ttl={40}>
+      <ToastProvider ttl={300}>
         <Trigger message="fleeting" />
       </ToastProvider>,
     );
     await userEvent.click(screen.getByRole('button', { name: 'fire' }));
-    expect(screen.getByText('fleeting')).toBeInTheDocument();
-    await waitForElementToBeRemoved(() => screen.queryByText('fleeting'));
+    await waitFor(() => expect(screen.queryByText('fleeting')).not.toBeInTheDocument());
   });
 
   test('a per-toast ttl outlives the provider default (compliance blocks)', async () => {

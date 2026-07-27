@@ -173,6 +173,10 @@ describe('I-REC — recording requires org flag AND preceding consent', () => {
     });
   }
 
+  // 40 DB-backed interleavings cannot fit vitest's 5s default: this I-REC
+  // never-event test was TIMING OUT under the full suite, i.e. a §4.3 compliance
+  // invariant was silently not being verified at all. The explicit 120s budget
+  // matches this file's beforeAll.
   test('randomized interleaving of cases holds the invariant every time', async () => {
     // Deterministic LCG over the case matrix — a compact stand-in for fast-check.
     let state = 20260715;
@@ -181,5 +185,5 @@ describe('I-REC — recording requires org flag AND preceding consent', () => {
       const c = CASES[state % CASES.length]!;
       await runCase(c, `rand-${i}`);
     }
-  });
+  }, 120_000);
 });

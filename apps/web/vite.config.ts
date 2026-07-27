@@ -50,5 +50,16 @@ export default defineConfig({
     css: false,
     setupFiles: ['./src/test/setup.ts'],
     restoreMocks: true,
+    /*
+     * Vitest's 5s default is SMALLER than what a lazy-route test legitimately
+     * costs here: the route chunks are transformed on demand inside the test
+     * process (~3.5-4.5s each), so `/leads`, `/login` and the builder blew the
+     * budget even running alone. Rounds of "flake fixes" that widened inner
+     * findBy/waitFor timeouts to 4s/5s/10s could never work — the outer budget
+     * kills the test first. Give the suite real headroom (the api suite already
+     * does this per-file via vi.setConfig); a genuine hang still fails in 30s.
+     */
+    testTimeout: 30_000,
+    hookTimeout: 30_000,
   },
 });
