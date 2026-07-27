@@ -47,6 +47,10 @@ export function getWorkspaceOwner(): WorkspaceOwner | null {
 }
 
 export function setWorkspaceOwner(owner: WorkspaceOwner): void {
+  // Flush + kill any live persistence loop BEFORE the owner record changes: its
+  // in-memory db belongs to the OUTGOING workspace, and sign-in navigates right
+  // after this call (the unload save must never land under the new owner's key).
+  stopWorkspacePersistence();
   try {
     localStorage.setItem(OWNER_KEY, JSON.stringify(owner));
   } catch {
@@ -55,6 +59,10 @@ export function setWorkspaceOwner(owner: WorkspaceOwner): void {
 }
 
 export function clearWorkspaceOwner(): void {
+  // Same rail as setWorkspaceOwner: sign-out flushes the account's data under
+  // its OWN key and stops the loop, so the unload save cannot leak the
+  // account's db into the anonymous key on a shared device.
+  stopWorkspacePersistence();
   try {
     localStorage.removeItem(OWNER_KEY);
   } catch {
@@ -133,6 +141,9 @@ export function hasBlankSnapshot(): boolean {
 
 /** Drop the persisted blank-workspace data (the workspace boots empty again). */
 export function clearBlankWorkspace(): void {
+  // Kill any live persistence loop first — otherwise the unload save fired by
+  // the follow-up reload immediately re-writes the data we just erased.
+  stopWorkspacePersistence();
   try {
     localStorage.removeItem(blankDbKey());
   } catch {
@@ -140,16 +151,74 @@ export function clearBlankWorkspace(): void {
   }
 }
 
+/*
+ * ── Persistence loop ─────────────────────────────────────────────────────────
+ * INVARIANT (I-WS-KEY): a persistence loop is bound to exactly ONE storage key,
+ * resolved once when the loop starts. A save may only ever land on that key —
+ * `collect()` returns the db that was hydrated FROM that key, so writing it
+ * anywhere else destroys another workspace's data (sign-in used to overwrite
+ * the new account's db with the outgoing page's db). Two layers enforce it:
+ *   1. every owner mutation above flushes-then-kills the live loop before the
+ *      owner record changes, and
+ *   2. even if the owner record changes some other way, save() re-checks the
+ *      key and refuses + self-destructs on a mismatch instead of writing.
+ */
+
+let activeStop: (() => void) | null = null;
+
+/** Tear down the live persistence loop, flushing one last save under its own key. */
+export function stopWorkspacePersistence(): void {
+  activeStop?.();
+}
+
 /**
  * Persist the blank workspace on a heartbeat + when the tab hides/closes.
  * Called from main.tsx AFTER the mock worker starts, and only in blank mode.
+ * Returns a disposer (flush + tear down); at most one loop runs per page.
  */
-export function startWorkspacePersistence(collect: () => BlankSnapshot): void {
-  if (workspaceMode() !== 'blank') return;
-  const save = (): void => saveBlankSnapshot(collect());
-  window.setInterval(save, 5_000);
-  window.addEventListener('beforeunload', save);
-  document.addEventListener('visibilitychange', () => {
+export function startWorkspacePersistence(collect: () => BlankSnapshot): () => void {
+  if (workspaceMode() !== 'blank') return () => {};
+  stopWorkspacePersistence();
+
+  const key = blankDbKey(); // resolved ONCE — see I-WS-KEY above
+  let disposed = false;
+
+  function save(): void {
+    if (disposed) return;
+    if (blankDbKey() !== key) {
+      // The owner changed under us: this db belongs to the OLD workspace.
+      // Never write it — the loop is dead from here on.
+      teardown();
+      return;
+    }
+    try {
+      localStorage.setItem(key, JSON.stringify(collect()));
+    } catch {
+      /* quota / private mode — the session still works, it just won't survive */
+    }
+  }
+
+  function onVisibility(): void {
     if (document.visibilityState === 'hidden') save();
-  });
+  }
+
+  function teardown(): void {
+    if (disposed) return;
+    disposed = true;
+    window.clearInterval(intervalId);
+    window.removeEventListener('beforeunload', save);
+    document.removeEventListener('visibilitychange', onVisibility);
+    if (activeStop === stop) activeStop = null;
+  }
+
+  function stop(): void {
+    save(); // final flush — refused (no-op) if the key no longer matches
+    teardown();
+  }
+
+  const intervalId = window.setInterval(save, 5_000);
+  window.addEventListener('beforeunload', save);
+  document.addEventListener('visibilitychange', onVisibility);
+  activeStop = stop;
+  return stop;
 }

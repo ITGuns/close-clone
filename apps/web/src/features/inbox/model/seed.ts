@@ -1,5 +1,6 @@
 import type { Contact, Lead } from '@switchboard/shared';
 import { db } from '../../../mocks/fixtures.ts';
+import { workspaceMode } from '../../../mocks/workspace.ts';
 import { int, mulberry32, pick, uuidFrom } from '../../../mocks/seed.ts';
 import type { InboxChannel } from './types.ts';
 import type { InboxStoreData, StoredReview, StoredTask, StoredThread } from './store.ts';
@@ -135,6 +136,15 @@ export function buildInboxSeed(): InboxStoreData {
   for (const lead of db.leads) {
     leadNames.set(lead.id, lead.name);
     leadDnc.set(lead.id, lead.dnc);
+  }
+
+  // Blank workspace: db.leads are the user's OWN imported leads — synthesizing
+  // reply threads, sequence reviews, or pre-completed tasks against them
+  // fabricates work nobody did (a fake "Done today" count on day one). Keep
+  // only the real lead-derived scaffolding (names + DNC flags for the rail);
+  // the queue starts genuinely empty.
+  if (workspaceMode() === 'blank') {
+    return { threads, tasks, reviews, leadNames, leadDnc };
   }
 
   const replyLeadIds = new Set<string>();

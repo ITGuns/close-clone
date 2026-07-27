@@ -8,6 +8,7 @@ import { BoardMark } from '../ui/BoardMark.tsx';
 import { CommandIcon, SearchIcon } from '../ui/icons.tsx';
 import { KbdCombo } from '../keyboard/index.ts';
 import { useAuth } from '../auth/AuthProvider.tsx';
+import { workspaceMode } from '../mocks/workspace.ts';
 import { ThemeToggle } from './ThemeToggle.tsx';
 
 interface TopBarProps {
@@ -19,6 +20,9 @@ export function TopBar({ searchRef, onOpenPalette }: TopBarProps): JSX.Element {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
+  // A blank/personal workspace holds the user's OWN data — saying "sample data"
+  // there is a lie. Read once per render; the mode only changes across a reload.
+  const blankWorkspace = workspaceMode() === 'blank';
 
   return (
     <header className="sb-topbar">
@@ -27,9 +31,13 @@ export function TopBar({ searchRef, onOpenPalette }: TopBarProps): JSX.Element {
         <span className="sb-topbar__org">Switchboard</span>
         <span
           className="sb-topbar__demo"
-          title="This is a demo build backed by synthetic sample data — no real accounts or messages."
+          title={
+            blankWorkspace
+              ? 'Demo build. This is your own workspace — the data is yours, saved in this browser on this device.'
+              : 'This is a demo build backed by synthetic sample data — no real accounts or messages.'
+          }
         >
-          Demo · sample data
+          {blankWorkspace ? 'Demo · your workspace' : 'Demo · sample data'}
         </span>
       </div>
 

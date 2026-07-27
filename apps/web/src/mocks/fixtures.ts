@@ -503,7 +503,10 @@ function applyWorkspace(built: MockDb): MockDb {
   built.contacts = snapshot?.contacts ?? [];
   built.opportunities = snapshot?.opportunities ?? [];
   built.activitiesByLead = new Map(snapshot?.activities ?? []);
-  if (snapshot && snapshot.smartViews.length > 0) built.smartViews = snapshot.smartViews;
+  // Guarded like every sibling field: loadBlankSnapshot only validates v+leads,
+  // so a truncated snapshot missing smartViews must not throw at module init.
+  const snapshotViews = snapshot?.smartViews ?? [];
+  if (snapshotViews.length > 0) built.smartViews = snapshotViews;
   built.searchIndex = buildSearchIndex(built.leads, built.contacts, built.leadStatuses);
   // A personal account owns a SOLO org — the user list is just them, so owner
   // dropdowns, actor names, and task assignment all resolve to the real person.

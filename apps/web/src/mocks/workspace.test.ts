@@ -2,14 +2,19 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { Lead } from '@switchboard/shared';
 import {
   clearBlankWorkspace,
+  clearWorkspaceOwner,
   hasBlankSnapshot,
   loadBlankSnapshot,
   saveBlankSnapshot,
   setWorkspaceMode,
+  setWorkspaceOwner,
+  startWorkspacePersistence,
+  stopWorkspacePersistence,
   workspaceMode,
   WORKSPACE_KEY,
 } from './workspace.ts';
-import { makeLead } from '../features/leads/test/factories.ts';
+import type { BlankSnapshot } from './workspace.ts';
+import { hoursAgo, makeLead, makeUser } from '../features/leads/test/factories.ts';
 
 /*
  * Workspace mode + blank-db persistence. The fixture-integration tests use
@@ -186,6 +191,93 @@ describe('personal-account workspace owners', () => {
   });
 });
 
+describe('persistence loop: owner-key invariant (I-WS-KEY)', () => {
+  const ANON_KEY = 'sb-blank-db-v1';
+  const keyFor = (username: string): string => `${ANON_KEY}:u:${username}`;
+  const snapWith = (name: string): BlankSnapshot => ({
+    v: 1,
+    leads: [makeLead({ name })],
+    contacts: [],
+    opportunities: [],
+    activities: [],
+    smartViews: [],
+  });
+  const leadNameAt = (key: string): string | undefined => {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return undefined;
+    return (JSON.parse(raw) as BlankSnapshot).leads[0]?.name;
+  };
+
+  // Loops are torn down by the flows under test; this is a belt-and-braces
+  // guard so a failing assertion can never leak a live interval into the suite.
+  afterEach(() => stopWorkspacePersistence());
+
+  test('sign-in: the unload save cannot write the anonymous db under the new owner key', () => {
+    // Regression (data loss): signing into "alice" from the anonymous blank
+    // workspace fired the unload save AFTER the owner switched, overwriting
+    // alice's persisted leads with the anonymous page's (empty) db.
+    setWorkspaceMode('blank');
+    localStorage.setItem(keyFor('alice'), JSON.stringify(snapWith('Alice Existing Lead')));
+
+    startWorkspacePersistence(() => snapWith('Anonymous Lead'));
+    // DevLoginPage.enterWorkspace order: owner first, THEN navigation unloads.
+    setWorkspaceOwner({ username: 'alice', user: makeUser() });
+    window.dispatchEvent(new Event('beforeunload'));
+
+    expect(leadNameAt(keyFor('alice'))).toBe('Alice Existing Lead'); // untouched
+    expect(leadNameAt(ANON_KEY)).toBe('Anonymous Lead'); // flushed under its OWN key
+  });
+
+  test('owner switch: A’s db never lands under B’s key, even bypassing the owner API', () => {
+    setWorkspaceOwner({ username: 'alice', user: makeUser() });
+    startWorkspacePersistence(() => snapWith('Alice Lead'));
+
+    // Worst case: the owner record changes WITHOUT setWorkspaceOwner (so no
+    // teardown hook ran). The save must refuse on the key mismatch alone.
+    localStorage.setItem(
+      'sb-workspace-owner',
+      JSON.stringify({ username: 'bob', user: makeUser() }),
+    );
+    window.dispatchEvent(new Event('beforeunload'));
+    expect(localStorage.getItem(keyFor('bob'))).toBeNull();
+
+    // The mismatch killed the loop: even an explicit stop-flush writes nothing.
+    stopWorkspacePersistence();
+    expect(localStorage.getItem(keyFor('bob'))).toBeNull();
+  });
+
+  test('sign-out: the account db cannot leak into the anonymous key', () => {
+    // Regression (cross-account leak on a shared device): TopBar clears the
+    // owner then navigates; the unload save wrote alice's data anonymously.
+    setWorkspaceOwner({ username: 'alice', user: makeUser() });
+    startWorkspacePersistence(() => snapWith('Alice Lead'));
+
+    clearWorkspaceOwner(); // TopBar order: clear owner, THEN navigate (unload)
+    window.dispatchEvent(new Event('beforeunload'));
+
+    expect(localStorage.getItem(ANON_KEY)).toBeNull(); // no leak
+    expect(leadNameAt(keyFor('alice'))).toBe('Alice Lead'); // flushed under her key
+  });
+
+  test('the disposer stops the heartbeat; reset is not immediately re-written', () => {
+    vi.useFakeTimers();
+    try {
+      setWorkspaceMode('blank');
+      const stop = startWorkspacePersistence(() => snapWith('Tick'));
+      vi.advanceTimersByTime(5_000);
+      expect(leadNameAt(ANON_KEY)).toBe('Tick');
+
+      stop();
+      clearBlankWorkspace(); // resetBlank flow — also kills any live loop itself
+      window.dispatchEvent(new Event('beforeunload'));
+      vi.advanceTimersByTime(60_000);
+      expect(localStorage.getItem(ANON_KEY)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
 describe('blank mode: feature stores seed NO fabricated history', () => {
   test('with hydrated user data present, comms/sms/calls stores stay clean', async () => {
     // Regression: after a reload, sample seeding used the USER's imported
@@ -234,5 +326,88 @@ describe('blank mode: feature stores seed NO fabricated history', () => {
 
     const { aiStore } = await import('../features/ai/data/store.ts');
     expect(aiStore.calls).toHaveLength(0);
+  });
+
+  test('reports seed fabricates zero activity for a blank workspace', async () => {
+    // Regression: buildReportSeed built a fixed 90-day per-rep activity profile
+    // regardless of leads — a brand-new EMPTY account opened Reports and saw
+    // hundreds of calls/emails and a full funnel attributed to their own name.
+    setWorkspaceMode('blank');
+    saveBlankSnapshot({
+      v: 1,
+      leads: [makeLead({ name: 'My Real Company' })],
+      contacts: [],
+      opportunities: [],
+      activities: [],
+      smartViews: [],
+    });
+    vi.resetModules();
+    const { buildReportSeed } = await import('../features/reports/mocks/seed.ts');
+    const seed = buildReportSeed();
+    expect(seed.activityEvents).toHaveLength(0);
+    expect(seed.calls).toHaveLength(0);
+    expect(seed.funnelOpps).toHaveLength(0);
+    expect(seed.stageChanges).toHaveLength(0);
+    expect(seed.sequences).toHaveLength(0);
+    expect(seed.enrollments).toHaveLength(0);
+    expect(seed.sequenceEvents).toHaveLength(0);
+    // Real scaffolding survives so the surface can render its empty state.
+    expect(seed.reps.length).toBeGreaterThan(0);
+    expect(seed.stages.length).toBeGreaterThan(0);
+  });
+
+  test('inbox seed synthesizes zero reviews/tasks/done-today from the user’s own leads', async () => {
+    // Regression: blank-mode db.leads are the USER's imported leads; the seed
+    // spun fake "awaiting review" sequence steps and 8 pre-completed tasks
+    // ("Done today: 8") out of them. The lead below carries every signal that
+    // triggers synthesis in sample mode — it must still produce nothing.
+    const lead = makeLead({
+      name: 'My Real Company',
+      dnc: false,
+      lastInboundAt: hoursAgo(2),
+      lastContactedAt: hoursAgo(30),
+      nextTaskDueAt: hoursAgo(5),
+    });
+    setWorkspaceMode('blank');
+    saveBlankSnapshot({
+      v: 1,
+      leads: [lead],
+      contacts: [],
+      opportunities: [],
+      activities: [],
+      smartViews: [],
+    });
+    vi.resetModules();
+    const { buildInboxSeed } = await import('../features/inbox/model/seed.ts');
+    const seed = buildInboxSeed();
+    expect(seed.threads.size).toBe(0);
+    expect(seed.reviews.size).toBe(0);
+    expect(seed.tasks.size).toBe(0); // no open tasks AND no fabricated done-today baseline
+    // The DNC rail's lead-derived scaffolding stays real (store.ts isLeadDnc).
+    expect(seed.leadNames.get(lead.id)).toBe('My Real Company');
+    expect(seed.leadDnc.get(lead.id)).toBe(false);
+  });
+});
+
+describe('snapshot resilience', () => {
+  test('a snapshot missing smartViews loads without throwing', async () => {
+    // Regression: fixtures read snapshot.smartViews.length unguarded — a
+    // truncated snapshot threw at module init and bricked the app on every
+    // route. It must hydrate the rest and fall back to the shipped views.
+    setWorkspaceMode('blank');
+    const truncated = {
+      v: 1,
+      leads: [makeLead({ name: 'Truncated Co' })],
+      contacts: [],
+      opportunities: [],
+      activities: [],
+      // no smartViews key at all
+    };
+    localStorage.setItem('sb-blank-db-v1', JSON.stringify(truncated));
+    vi.resetModules();
+    const { db } = await import('./fixtures.ts');
+    expect(db.leads).toHaveLength(1);
+    expect(db.leads[0]?.name).toBe('Truncated Co');
+    expect(db.smartViews.length).toBeGreaterThan(0); // shipped views fall back in
   });
 });

@@ -16,6 +16,7 @@
  */
 import type { OpportunityStage, User } from '@switchboard/shared';
 import { db } from '../../../mocks/fixtures.ts';
+import { workspaceMode } from '../../../mocks/workspace.ts';
 import { MS_PER_DAY, REPORT_NOW } from '../lib/range.ts';
 import { stageKind } from '../lib/stages.ts';
 import type { SequenceStatus } from '../types.ts';
@@ -485,6 +486,24 @@ function buildSequences(): {
 export function buildReportSeed(): ReportSeed {
   const reps = db.users;
   const stages = db.opportunityStages;
+  // Blank workspace: every raw array here is FABRICATED (fixed per-rep activity
+  // profiles, funnel populations, sequence stats) — none of it happened. A
+  // personal/blank org gets genuinely empty reports; only the real scaffolding
+  // the surface needs (reps, stages, currency labels) survives.
+  if (workspaceMode() === 'blank') {
+    return {
+      reps,
+      stages,
+      currencies: [...CURRENCIES],
+      activityEvents: [],
+      calls: [],
+      funnelOpps: [],
+      stageChanges: [],
+      sequences: [],
+      enrollments: [],
+      sequenceEvents: [],
+    };
+  }
   const { activityEvents, calls } = buildActivity(reps);
   const { funnelOpps, stageChanges } = buildFunnel(stages);
   const { sequences, enrollments, sequenceEvents } = buildSequences();
