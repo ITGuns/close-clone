@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -96,3 +97,61 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm perf
+
+  # ---------------------------------------------------------------------------
+  # GitHub Pages demo publish. Gated: `needs: build-test` means a red typecheck,
+  # lint, format or test run blocks the publish instead of shipping it to the
+  # demo URL (previously this lived in a standalone pages.yml that fired on every
+  # push to main with no gate at all). Not gated on `perf` on purpose: that job
+  # measures API latency against real Postgres and has no bearing on the static
+  # mock-mode web bundle.
+  # ---------------------------------------------------------------------------
+  pages-build:
+    name: build Pages demo
+    needs: build-test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.31.0
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build demo (mock mode, repo subpath)
+        env:
+          VITE_BASE: /close-clone/
+        run: pnpm --filter @switchboard/web build
+      - name: SPA fallback for deep links
+        run: cp apps/web/dist/index.html apps/web/dist/404.html
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/dist
+
+  pages-deploy:
+    name: deploy Pages demo
+    needs: pages-build
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
