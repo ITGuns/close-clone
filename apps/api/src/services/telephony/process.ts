@@ -58,7 +58,11 @@ export interface ProcessResult {
   channel: TwilioChannel | null;
   /** The C4 activity type emitted, if any. */
   activity: ActivityType | null;
-  /** Soft-failure note recorded on the inbox row (e.g. unknown number). */
+  /**
+   * Note recorded on the inbox row (e.g. unknown number). Usually a soft failure,
+   * but `opt_out_suppressed_without_contact` records a SUCCESSFUL suppression that
+   * simply had no lead to write a timeline event against.
+   */
   error: string | null;
   confirmationSent: boolean;
 }
@@ -336,8 +340,41 @@ async function processSms(
     return noop('malformed_sms');
   }
 
+  const keyword = matchOptOutKeyword(body);
   const match = await resolveContactByPhone(tx, from);
-  if (match === null) return noop('no_contact_for_number');
+
+  if (match === null) {
+    // I-QUIET says "suppress number GLOBALLY" — not "suppress if we recognise the
+    // sender". Returning early on an unmatched number meant a STOP left that number
+    // fully sendable, which is precisely the failure the invariant exists to
+    // prevent. It is reachable whenever the contact record has drifted from the
+    // number: phone edited, contact soft-deleted, lead merged, the person texted
+    // from a second handset, or we reached them via a raw `to` in the first place.
+    //
+    // The two enforceable halves of the invariant both happen here. The third,
+    // `sms_opt_out`, structurally cannot: `activities.lead_id` is NOT NULL and
+    // there is no lead to hang it on. The suppression row is the record — it
+    // carries source, reason and timestamp, and is admin-visible under
+    // `admin/suppressions` — so the block stays explainable and releasable.
+    const optOutKey = phoneMatchKey(from);
+    if (keyword === null) return noop('no_contact_for_number');
+    if (optOutKey === '') return noop('opt_out_unmatchable_number');
+    await addPhoneSuppression(tx, {
+      key: optOutKey,
+      source: 'stop_keyword',
+      reason: `sms ${keyword} (no matching contact)`,
+    });
+    return {
+      activity: null,
+      error: 'opt_out_suppressed_without_contact',
+      confirmation: {
+        from: to,
+        to: from,
+        body: deps.optOutConfirmationBody ?? DEFAULT_OPT_OUT_CONFIRMATION,
+        idempotencyKey: `optout-confirm:${messageSid}`,
+      },
+    };
+  }
 
   // Persist the inbound message (dedupe backstop on provider_sid).
   const smsRows = await tx
@@ -357,7 +394,6 @@ async function processSms(
     .returning({ id: smsMessages.id });
   const smsId = smsRows[0]?.id ?? (await loadSmsIdBySid(tx, messageSid));
 
-  const keyword = matchOptOutKeyword(body);
   if (keyword !== null) {
     // I-QUIET: suppress the number globally, emit sms_opt_out, confirm once.
     await addPhoneSuppression(tx, {

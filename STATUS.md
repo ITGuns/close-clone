@@ -1,5 +1,17 @@
 # STATUS — Switchboard build
 
+## COMPLIANCE RAIL FIXES (2026-07-20, D-060 · CONTRACTS v1.3.4)
+
+The two real compliance gaps left open by the D-059 audit are closed. Both were rails that were enforceable on paper and bypassable in practice.
+
+**I-DNC followed the caller's word, not the destination.** Every one-off engine takes an OPTIONAL `contactId` beside a free-form destination, and each checked do-not-contact only on the contact the caller *named* — so omitting `contactId` reached a DNC'd human through the front door on `POST /sms/send`, `POST /calls/dial`, and `POST /emails/send`. Email was worst: `cc` was never DNC-checked by any code path. Ticking `contacts.dnc` writes no suppression row, so the existing suppression probes did not cover it, and a valid API token was sufficient — making it an I-RAIL-API hole as well. DNC is now resolved from the destination (`services/compliance/dnc.ts`, called by all three engines), which also closes the variant where `contactId` names a clean contact while `to` carries a DNC'd person's address.
+
+**I-QUIET only suppressed people we recognised.** The contract says an inbound STOP suppresses the number *globally*; the ingress returned early whenever the sender did not resolve to a contact, so a STOP from a drifted number — phone edited, contact soft-deleted, lead merged, second handset, or someone we only ever reached via a raw `to` — left that number fully sendable. Suppression and the confirmation SMS are now unconditional. `sms_opt_out` structurally cannot follow (`activities.lead_id` is NOT NULL and there is no lead), so the `suppressions` row is the record and the inbox note reads `opt_out_suppressed_without_contact`.
+
+**The new tests are proven non-vacuous.** Both suites were re-run against the pre-fix engines: 9 of the 13 I-DNC tests and 2 of the 3 I-QUIET tests fail there. The "still sends", "soft-deleted DNC does not block", and "an ordinary reply suppresses nothing" cases pass in *both* states, so the suite proves a rail rather than a wall — and the final test drives the whole loop end to end (unmatched STOP → `sendSms` to that number → `phone_suppressed`, provider never called). Bulk was checked and has no send path; sequence dispatch always carries a `contactId` resolved to the destination and was never exposed.
+
+API suite **156 files / 1,756 tests green**; web untouched at 126/1,382. CONTRACTS §C6 I-DNC and I-QUIET carry the clarifying language at v1.3.4.
+
 ## AUDIT + P0 FIX WAVE (2026-07-20, D-059)
 
 A six-dimension audit (compliance rails · security · web state/persistence · doc drift · build/deploy · test health) ran in parallel, and the top of its queue is fixed and green. **Three P0s closed:** the one-click List-Unsubscribe HMAC key was forgeable in every shipped configuration (published placeholder, empty in the deploy example, and an `??` fallback that does not catch `''`) — now a validated, fail-closed config field with no key reuse; the blank-workspace persistence loop destroyed an account's data on sign-in (it resolved its storage key at save time but wrote the outgoing page's db) — now governed by invariant I-WS-KEY; and Reports + Inbox were the two fabricators D-056 missed, so a brand-new empty account saw ~540 calls attributed to itself.

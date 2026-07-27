@@ -22,6 +22,7 @@ import { materializeThreadActivities } from './activities.ts';
 import type { ActivityWebhookEmitter } from '../activity/index.ts';
 import { renderTemplate, type MergeContext } from './merge.ts';
 import { resolveThreadForMessage } from './threading.ts';
+import { findEmailDnc } from '../compliance/dnc.ts';
 
 /**
  * One-off send engine (task 2d) — THE only path to `EmailProvider.send` for
@@ -570,6 +571,13 @@ export async function sendOneOff(
   // Compliance rails — I-DNC + suppression, at execution time, in the engine.
   if (lead.dnc) throw new SuppressedError('lead_dnc', input.leadId);
   if (contact !== null && contact.dnc) throw new SuppressedError('contact_dnc', contact.id);
+  // Every RECIPIENT, not just the named contact. `contactId` is optional while `to`
+  // and `cc` are free-form address lists, so the line above was skippable by simply
+  // not naming the DNC'd contact — cc especially, which no prior check looked at.
+  // A rep ticking `contacts.dnc` writes no suppression row, so the probe below does
+  // not cover this. With a valid API token that made it an I-RAIL-API hole too.
+  const dnc = await findEmailDnc(db, [...to, ...cc]);
+  if (dnc !== null) throw new SuppressedError('contact_dnc', dnc.contactId);
   const suppressed = await firstSuppressedRecipient(db, [...to, ...cc]);
   if (suppressed !== null) throw new SuppressedError('suppressed', suppressed);
 

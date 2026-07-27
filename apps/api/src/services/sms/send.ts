@@ -5,6 +5,7 @@ import { contacts, leads, orgSettings, smsMessages, type Db } from '../../db/ind
 import { recordActivity, type ActivityWebhookEmitter } from '../activity/index.ts';
 import { isPhoneSuppressed } from '../telephony/suppression.ts';
 import { phoneMatchKey } from '../telephony/phone.ts';
+import { findPhoneDnc } from '../compliance/dnc.ts';
 import { inferTimezoneFromNumber } from './area-code-timezone.ts';
 import { isWithinAllowedHours, parseQuietHours, resolveQuietHoursTimezone } from './quiet-hours.ts';
 import { appendOptOutLanguage, bodyHasOptOutLanguage } from './opt-out-language.ts';
@@ -243,6 +244,14 @@ export async function sendSms(deps: SmsSendDeps, input: SmsSendInput): Promise<S
   if (lead.dnc) throw new SmsSuppressedError('lead_dnc');
   if (contact !== null && contact.dnc) throw new SmsSuppressedError('contact_dnc');
   const toKey = phoneMatchKey(toNumber);
+  // The DESTINATION, not just the named contact: `contactId` is optional and `to`
+  // is free-form, so a caller could otherwise text a DNC'd contact by passing their
+  // number with no contactId and walk straight past the line above (I-DNC, and with
+  // a valid token, I-RAIL-API). Ticking `contacts.dnc` writes no suppression row,
+  // so the phone-suppression probe below does not cover this.
+  if ((await findPhoneDnc(db, toKey, toNumber)) !== null) {
+    throw new SmsSuppressedError('contact_dnc');
+  }
   if (await isPhoneSuppressed(db, toKey)) throw new SmsSuppressedError('phone_suppressed');
 
   // 2. I-QUIET — 8am–9pm recipient-local (area-code inferred, fallback company tz).

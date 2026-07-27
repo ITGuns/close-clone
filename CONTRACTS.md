@@ -1,6 +1,6 @@
 # CONTRACTS — Switchboard (normative; Opus may not amend — report friction upward)
 
-Version: 1.3.3. Changes only by Fable; every change bumps this version and is logged in DECISIONS.md.
+Version: 1.3.4. Changes only by Fable; every change bumps this version and is logged in DECISIONS.md.
 All types live in `packages/shared/src/` as zod schemas with inferred TS types. Zod schema = runtime contract; the TS type is derived, never hand-written separately.
 
 ---
@@ -158,8 +158,8 @@ States: `UNLINKED → AUTHORIZING → BACKFILLING → LIVE ⇄ DEGRADED`, `LIVE 
 - **I-SEND-3 (never suppressed):** suppression check runs inside the send transaction; adding a suppression at any point before claim commit prevents send. Property test races suppression-insert vs claim.
 - **I-SEND-4 (window/cap):** no send outside org sending window (recipient-local, fallback company tz) or beyond per-mailbox daily cap; cap counter increments inside the claim transaction.
 - **I-SEND-5 (unsubscribe):** every sequence email includes `List-Unsubscribe` (mailto + one-click https) headers; hitting either suppresses globally ≤ 1s and emits `unsubscribed` + `sequence_paused`.
-- **I-DNC:** every send/dial path (sequence, bulk, one-off, API, dialer) checks contact+lead DNC at execution time.
-- **I-QUIET (SMS):** no outbound SMS outside 8am–9pm recipient-local (area-code inferred, fallback company tz); STOP/UNSUBSCRIBE/QUIT/CANCEL/END inbound → suppress number globally, confirm once, emit `sms_opt_out`.
+- **I-DNC:** every send/dial path (sequence, bulk, one-off, API, dialer) checks contact+lead DNC at execution time. **(v1.3.4/D-060 clarification — this was under-enforced, not merely under-documented.)** The check follows the RESOLVED DESTINATION, not the contact the caller named: `contactId` is optional on the one-off engines while `to`/`cc` are free-form, so DNC is evaluated against every live contact owning the destination number/address — cc included, case- and formatting-insensitive, across leads (a DNC flag attaches to the human, not to a row) and independent of the lead's soft-delete state. Soft-DELETED contacts are excluded so a block always remains liftable in the UI; the durable global mechanism is `suppressions`. Naming a clean `contactId` never licenses a DNC destination. Enforced in `services/compliance/dnc.ts`, called by the sms/dial/email engines; blocked sends raise C8 `SUPPRESSED` with the existing `contact_dnc` reason (no new error code).
+- **I-QUIET (SMS):** no outbound SMS outside 8am–9pm recipient-local (area-code inferred, fallback company tz); STOP/UNSUBSCRIBE/QUIT/CANCEL/END inbound → suppress number globally, confirm once, emit `sms_opt_out`. **(v1.3.4/D-060 clarification.)** "Globally" is unconditional on recognising the sender: a STOP from a number that resolves to NO contact still suppresses and still confirms. `sms_opt_out` is the one part that cannot follow — `activities.lead_id` is NOT NULL and there is no lead — so the `suppressions` row (source `stop_keyword`, admin-visible under `admin/suppressions`) is the record, and the `webhook_inbox` note reads `opt_out_suppressed_without_contact`.
 - **I-REC:** recording only when `org_settings.recording_enabled` (admin+audit-logged change) AND consent announcement event `recording_consent_played` precedes recording start on that call; per-call rep opt-out honored.
 - **I-AI:** no AI output row reaches `status='final'` or sends without an explicit user action recorded (the confirming request carries `confirmedBy`).
 - **I-RAIL-API:** all invariants above hold when invoked via the internal REST API — asserted by tests that attempt bypass with a valid token.

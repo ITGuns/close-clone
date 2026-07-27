@@ -12,15 +12,18 @@ import {
   parseTwilioWebhook,
   persistTwilioWebhook,
   processPendingTwilioWebhooks,
+  type ProcessResult,
   type TelephonyProcessDeps,
   type TwilioChannel,
 } from './index.ts';
+import { sendSms } from '../sms/send.ts';
 import {
   activitiesFor,
   activePhoneSuppressions,
   callsFor,
   seedContact,
   seedLead,
+  seedOrgSettings,
   seedUser,
   smsFor,
 } from './test-helpers.ts';
@@ -208,6 +211,75 @@ describe('inbound SMS (I-QUIET)', () => {
     const acts = await activitiesFor(ctx.db, lead);
     expect(acts.filter((a) => a.type === 'sms_opt_out')).toHaveLength(5);
     expect(mock.getOutboundSms()).toHaveLength(5);
+  });
+});
+
+describe('inbound STOP from an UNMATCHED number (I-QUIET, D-060)', () => {
+  /**
+   * I-QUIET says "suppress the number GLOBALLY" — the ingress used to return early
+   * on an unresolvable sender, so a STOP from a number whose contact record had
+   * drifted (phone edited, contact deleted, lead merged, second handset) left that
+   * number fully sendable. These drive the real ingress with the contact removed.
+   */
+  async function stopFromStranger(): Promise<ProcessResult[]> {
+    await ctx.db.delete(contacts).where(eq(contacts.leadId, lead));
+    await persist(
+      ctx.db,
+      pick('sms-inbound/').filter((f) => f.relativePath.includes('-stop.json')),
+    );
+    return processPendingTwilioWebhooks(deps);
+  }
+
+  test('suppresses the number and still confirms exactly once', async () => {
+    const results = await stopFromStranger();
+
+    expect(await activePhoneSuppressions(ctx.db)).toContain('3055550147');
+    const confirmations = mock.getOutboundSms();
+    expect(confirmations).toHaveLength(1);
+    expect(confirmations[0]?.to).toBe(LEAD_NUMBER);
+    // No timeline event is possible — activities.lead_id is NOT NULL and there is
+    // no lead. The inbox note says so rather than claiming a failure.
+    expect(results.some((r) => r.error === 'opt_out_suppressed_without_contact')).toBe(true);
+    expect(results.every((r) => r.activity !== 'sms_opt_out')).toBe(true);
+
+    // Re-processing is a no-op: the claim is idempotent, so no second confirmation.
+    await processPendingTwilioWebhooks(deps);
+    expect(mock.getOutboundSms()).toHaveLength(1);
+  });
+
+  test('the number is genuinely unsendable afterwards — the point of the rail', async () => {
+    await stopFromStranger();
+
+    const rep = await seedUser(ctx.db, { name: 'Rep' });
+    const other = await seedLead(ctx.db, { name: 'Another lead' });
+    await seedOrgSettings(ctx.db, { companyTimezone: 'UTC' });
+    const sendMock = createMockTelephonyProvider();
+
+    await expect(
+      sendSms(
+        {
+          db: ctx.db,
+          provider: sendMock,
+          now: () => new Date('2026-07-15T16:00:00.000Z'),
+          fromNumber: REP_NUMBER,
+        },
+        { userId: rep, leadId: other, to: LEAD_NUMBER, body: 'Hi again' },
+      ),
+    ).rejects.toMatchObject({ name: 'SmsSuppressedError', reason: 'phone_suppressed' });
+    expect(sendMock.sendSmsCount).toBe(0);
+  });
+
+  test('an ordinary reply from an unmatched number still suppresses nothing', async () => {
+    await ctx.db.delete(contacts).where(eq(contacts.leadId, lead));
+    await persist(
+      ctx.db,
+      pick('sms-inbound/').filter((f) => f.relativePath.includes('-reply.json')),
+    );
+    const results = await processPendingTwilioWebhooks(deps);
+
+    expect(await activePhoneSuppressions(ctx.db)).toHaveLength(0);
+    expect(mock.getOutboundSms()).toHaveLength(0);
+    expect(results.every((r) => r.error === 'no_contact_for_number')).toBe(true);
   });
 });
 

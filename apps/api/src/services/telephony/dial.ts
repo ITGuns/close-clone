@@ -4,6 +4,7 @@ import { calls, contacts, leads, notes, type Db } from '../../db/index.ts';
 import { recordActivity, type ActivityWebhookEmitter } from '../activity/index.ts';
 import { isRecordingEnabled } from './recording.ts';
 import { isPhoneSuppressed } from './suppression.ts';
+import { findPhoneDnc } from '../compliance/dnc.ts';
 import { phoneMatchKey } from './phone.ts';
 
 /**
@@ -130,8 +131,17 @@ export async function dialCall(deps: DialDeps, input: DialInput): Promise<DialOu
   if (fromNumber === null || fromNumber.length === 0)
     throw new DialValidationError('no caller id (provide `from` or configure a default)');
 
-  // I-DNC / suppression: an active phone suppression blocks every dial path.
-  if (await isPhoneSuppressed(deps.db, phoneMatchKey(toNumber))) {
+  // I-DNC: the DESTINATION, not just the named contact. `contactId` is optional and
+  // `to` is free-form, so the contact-DNC check above was skippable by dialing a
+  // DNC'd contact's number without naming them (and with a valid token, that made it
+  // an I-RAIL-API hole). `contacts.dnc` writes no suppression row, so the probe below
+  // does not cover it.
+  const toKey = phoneMatchKey(toNumber);
+  if ((await findPhoneDnc(deps.db, toKey, toNumber)) !== null) {
+    throw new DialBlockedError('contact_dnc');
+  }
+  // An active phone suppression blocks every dial path.
+  if (await isPhoneSuppressed(deps.db, toKey)) {
     throw new DialBlockedError('phone_suppressed');
   }
 
