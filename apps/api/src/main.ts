@@ -316,7 +316,11 @@ export async function buildProductionApp(options: BuildOptions = {}): Promise<Bu
     db,
     emailSend: { providerFor: senderRegistry.providerFor, cipher },
     sequences: { queue, now: () => new Date() },
-    unsubscribe: { secret: env['LIST_UNSUBSCRIBE_SECRET'] ?? config.sessionSecret },
+    // Validated in loadConfig (fail-closed in production). Deliberately NOT
+    // falling back to sessionSecret: reusing the session key for a different
+    // HMAC purpose is key reuse, and the old `env[...] ?? sessionSecret` read
+    // silently accepted '' from a blank env line as the signing key.
+    unsubscribe: { secret: config.listUnsubscribeSecret },
     // Email sync routes only when a provider exists (mock, or real + Gmail
     // configured). Absent → the routes are simply not mounted; the rest of the
     // API is unaffected.
@@ -395,7 +399,9 @@ export async function buildProductionApp(options: BuildOptions = {}): Promise<Bu
   const unsubscribeConfig = {
     baseUrl: env['PUBLIC_WEBHOOK_URL'] ?? `http://localhost:${config.port}`,
     mailbox: env['UNSUBSCRIBE_MAILBOX'] ?? 'unsubscribe@switchboard.internal',
-    secret: env['LIST_UNSUBSCRIBE_SECRET'] ?? config.sessionSecret,
+    // Same validated key as the /unsub route above (mint + verify must agree);
+    // see loadConfig for the production fail-closed rule.
+    secret: config.listUnsubscribeSecret,
   };
   const dispatchDeps = {
     db,
