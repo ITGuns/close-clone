@@ -1,17 +1,20 @@
 import { Fragment, useMemo } from 'react';
 import type { JSX } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { SmartView } from '@switchboard/shared';
 import { cx } from '../../../lib/cx.ts';
 import { useListNav } from '../../../keyboard/index.ts';
-import { Skeleton, ErrorState } from '../../../ui/index.ts';
-import { FilterIcon, InboxIcon, UsersIcon } from '../icons.tsx';
+import { Skeleton, ErrorState, IconButton } from '../../../ui/index.ts';
+import { FilterIcon, InboxIcon, PlusIcon, UsersIcon } from '../icons.tsx';
 
 /*
  * The Smart Views rail: a keyboardable (j/k/enter, roving tabindex) list of saved
- * views plus the always-present "All leads" entry. Presentational — the surface
- * owns the GET /smart-views query and passes state down, so loading/error/empty
- * are rendered here from typed flags. Selecting a view is single-select: the
- * active route's entry carries aria-current + aria-selected.
+ * views plus the always-present "All leads" entry. The surface owns the
+ * GET /smart-views query and passes state down, so loading/error/empty are
+ * rendered here from typed flags. Selecting a view is single-select: the active
+ * route's entry carries aria-current + aria-selected. The one route this rail
+ * owns itself is the "New view" affordance in the header → /views/new (the
+ * builder); the surface has no say in it, so it does not take a prop.
  */
 
 interface Entry {
@@ -46,6 +49,7 @@ export function SmartViewsSidebar({
   errorMessage,
   onRetry,
 }: SmartViewsSidebarProps): JSX.Element {
+  const navigate = useNavigate();
   const entries = useMemo<Entry[]>(() => {
     const all: Entry = { id: null, name: 'All leads', group: 'pinned', shared: false };
     const shared = views
@@ -77,6 +81,14 @@ export function SmartViewsSidebar({
       <div className="sv-rail__head">
         <FilterIcon size={14} className="sv-rail__head-icon" />
         <span className="sv-rail__head-label">Views</span>
+        <IconButton
+          label="New view"
+          size="sm"
+          className="sv-rail__new"
+          onClick={() => navigate('/views/new')}
+        >
+          <PlusIcon size={14} />
+        </IconButton>
       </div>
 
       {isLoading ? (

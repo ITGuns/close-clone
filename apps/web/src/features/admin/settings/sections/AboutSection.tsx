@@ -1,28 +1,34 @@
 import type { JSX } from 'react';
 import { Link } from 'react-router-dom';
-import { VERSION } from '@switchboard/shared';
+import { ACTIVITY_TYPES } from '@switchboard/shared';
 import { BoardMark } from '../../../../ui/BoardMark.tsx';
 import { ExternalLinkIcon } from '../../icons.tsx';
 
 /*
  * About — build info + a few honest stats, and a link to the /welcome tour. The
  * data-layer line reflects the runtime API mode so the demo build is legible.
+ *
+ * Every number here has to be a fact about the PRODUCT a user could go count.
+ * Test counts and the placeholder package VERSION ('0.0.0') are not that, so
+ * neither is shown: the build line names the build, and the activity-type count
+ * is read from the shared taxonomy rather than typed in, so it cannot drift.
  */
 
-const API_MODE = import.meta.env.VITE_API_MODE === 'real' ? 'Live API' : 'Mock (MSW)';
+const IS_REAL_API = import.meta.env.VITE_API_MODE === 'real';
+const API_MODE = IS_REAL_API ? 'Live API' : 'Mock (MSW)';
 
 const STATS: ReadonlyArray<{ value: string; label: string }> = [
   { value: '5', label: 'Settings sections' },
   { value: '5', label: 'Bulk actions' },
   { value: '6', label: 'State lamps' },
-  { value: '46', label: 'Admin surface checks' },
+  { value: String(ACTIVITY_TYPES.length), label: 'Timeline event types' },
 ];
 
 const BUILD_INFO: ReadonlyArray<{ term: string; value: string }> = [
-  { term: 'Version', value: VERSION },
+  { term: 'Build', value: IS_REAL_API ? 'Internal build' : 'Demo build' },
   { term: 'Design system', value: 'Operator Grid' },
   { term: 'Data layer', value: API_MODE },
-  { term: 'Contract', value: 'CONTRACTS 1.2.0' },
+  { term: 'Contract', value: 'CONTRACTS 1.3.3' },
 ];
 
 export function AboutSection(): JSX.Element {

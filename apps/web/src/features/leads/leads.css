@@ -45,6 +45,10 @@
   text-transform: uppercase;
   letter-spacing: var(--lead-tracking);
 }
+/* "New view" → the builder. Pinned to the trailing edge of the rail header. */
+.sv-rail__new {
+  margin-left: auto;
+}
 .sv-rail__list {
   display: flex;
   flex-direction: column;

@@ -2,42 +2,47 @@ import type { JSX } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { cx } from '../lib/cx.ts';
-import { listLeads } from '../api/leads.ts';
+import { listSmartViews } from '../api/smartViews.ts';
 import { useListNav, KbdCombo } from '../keyboard/index.ts';
-import { EmptyState, Spinner, StatusPill } from '../ui/index.ts';
-import { Page, PlaceholderNote } from './Page.tsx';
+import { Button, EmptyState, ErrorState, Spinner, StatusPill } from '../ui/index.ts';
+import { Page } from './Page.tsx';
 
 /**
- * Views placeholder. The Smart View builder lands later; the "Recent leads"
- * panel here is a live demonstration of the reusable useListNav hook (roving
- * tabindex, j/k to move, Enter to open) wired to the API client.
+ * Views — the saved Smart Views index. Each row is a real saved query: the name
+ * plus the DSL it runs. Enter (or a click) opens the view's leads; "New view"
+ * goes to the builder at /views/new. j/k movement comes from the shared
+ * useListNav hook, the same one the leads table and the rail use.
  */
 export function ViewsPage(): JSX.Element {
   const navigate = useNavigate();
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['views-demo-leads'],
-    queryFn: () => listLeads({ limit: 12 }),
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['smart-views'],
+    queryFn: () => listSmartViews(),
   });
-  const leads = data?.items ?? [];
+  const views = data ?? [];
 
   const nav = useListNav({
-    count: leads.length,
+    count: views.length,
+    group: 'Views',
     onActivate: (index) => {
-      const lead = leads[index];
-      if (lead) navigate(`/leads/${lead.id}`);
+      const view = views[index];
+      if (view) navigate(`/views/${view.id}`);
     },
   });
 
   return (
-    <Page title="Views" subtitle="Saved Smart Views built on the query DSL.">
-      <PlaceholderNote>
-        The Smart View builder and DSL editor land in a later phase. This list demonstrates the
-        reusable j/k keyboard navigation used across every list surface.
-      </PlaceholderNote>
-
-      <section className="sb-demo" aria-label="Keyboard navigation demo">
+    <Page
+      title="Views"
+      subtitle="Saved queries over your leads. Each one re-runs when you open it."
+      actions={
+        <Button variant="primary" onClick={() => navigate('/views/new')}>
+          New view
+        </Button>
+      }
+    >
+      <section className="sb-demo" aria-label="Saved Smart Views">
         <header className="sb-demo__head">
-          <h2 className="sb-demo__title">Recent leads</h2>
+          <h2 className="sb-demo__title">Saved views</h2>
           <span className="sb-demo__hint" aria-hidden="true">
             <KbdCombo combo="j" />
             <KbdCombo combo="k" />
@@ -49,39 +54,45 @@ export function ViewsPage(): JSX.Element {
 
         {isLoading ? (
           <div className="sb-demo__loading">
-            <Spinner label="Loading leads" />
+            <Spinner label="Loading views" />
           </div>
         ) : isError ? (
-          <EmptyState title="Couldn’t load leads" description="The mock API request failed." />
-        ) : leads.length === 0 ? (
-          <EmptyState title="No leads yet" description="Leads will appear here." />
+          <ErrorState
+            title="Couldn’t load your views"
+            description="The server didn’t answer. Your saved views are safe — try again."
+            onRetry={() => void refetch()}
+          />
+        ) : views.length === 0 ? (
+          <EmptyState
+            title="No saved views yet"
+            description="A Smart View saves a query over your leads and re-runs it every time you open it."
+            actions={
+              <Button variant="primary" onClick={() => navigate('/views/new')}>
+                New view
+              </Button>
+            }
+          />
         ) : (
           <ul
             className="sb-demo__list"
             role="listbox"
-            aria-label="Recent leads"
+            aria-label="Saved Smart Views"
             {...nav.containerProps}
           >
-            {leads.map((lead, index) => {
+            {views.map((view, index) => {
               const itemProps = nav.getItemProps(index);
               return (
                 <li
-                  key={lead.id}
-                  aria-label={lead.name}
+                  key={view.id}
+                  aria-label={view.name}
                   className={cx('sb-demo__opt', itemProps['aria-selected'] && 'is-active')}
                   {...itemProps}
                 >
                   <span className="sb-demo__opt-main">
-                    <span className="sb-demo__opt-name">{lead.name}</span>
-                    {lead.description ? (
-                      <span className="sb-demo__opt-meta">{lead.description}</span>
-                    ) : null}
+                    <span className="sb-demo__opt-name">{view.name}</span>
+                    <span className="sb-demo__opt-meta">{view.dsl}</span>
                   </span>
-                  {lead.dnc ? (
-                    <StatusPill tone="dnc" dot>
-                      DNC
-                    </StatusPill>
-                  ) : null}
+                  {view.shared ? <StatusPill>Shared</StatusPill> : null}
                 </li>
               );
             })}

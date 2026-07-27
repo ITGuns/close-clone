@@ -77,8 +77,9 @@ const WORKING: readonly Faq[] = [
     a: (
       <>
         A saved query over your leads that re-runs every time you open it — so “my overdue
-        follow-ups” is always current, never a stale list. Build one under{' '}
-        <Link to="/views">Views</Link>.
+        follow-ups” is always current, never a stale list. Open <Link to="/views">Views</Link> and
+        hit <strong>New view</strong> to build one; the same button sits at the top of the views
+        rail on the leads screen.
       </>
     ),
   },
@@ -150,7 +151,7 @@ export function HelpPage(): JSX.Element {
           <p className="sb-help__lede">
             Switchboard is an internal tool — there is no outside help desk. Ask a workspace admin:
             they can fix access, roles, custom fields, templates, and compliance settings, and they
-            can see the audit log behind any change. Version and workspace details live in{' '}
+            can see the audit log behind any change. Build and workspace details live in{' '}
             <Link to="/settings">Settings → About</Link>.
           </p>
         </section>
