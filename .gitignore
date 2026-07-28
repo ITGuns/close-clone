@@ -11,3 +11,6 @@ coverage/
 .pglite/
 tmp/
 fixtures/out/
+
+# Boss-facing screenshot deck — regenerate with e2e/screenshots.mjs
+screenshots/
