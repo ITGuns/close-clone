@@ -7,8 +7,20 @@ import type {
 import { MockEmailProvider } from './mock/mock-email-provider.ts';
 import { GmailEmailProvider } from './email/gmail-email-provider.ts';
 import { createMockTelephonyProvider } from './telephony/index.ts';
-import { createMockASRProvider } from './asr/index.ts';
-import { createMockAIProvider } from './ai/index.ts';
+import {
+  FetchTwilioTransport,
+  createTwilioTelephonyProvider,
+} from './telephony/twilio-telephony-provider.ts';
+import {
+  FetchDeepgramTransport,
+  createDeepgramASRProvider,
+  createMockASRProvider,
+} from './asr/index.ts';
+import {
+  FetchAnthropicTransport,
+  createHaikuAIProvider,
+  createMockAIProvider,
+} from './ai/index.ts';
 import type { Clock, IdSource } from './mock/clock.ts';
 
 /**
@@ -19,10 +31,17 @@ import type { Clock, IdSource } from './mock/clock.ts';
  * only on the `EmailProvider` interface, so every code path above is identical
  * whether the process is mocked or live.
  *
- * The real branch binds the Gmail REST adapter (task 2b). It needs OAuth client
- * credentials plus a default mailbox identity, supplied by the caller from parsed
- * config (never `process.env` here — see `config.ts`). Absent that config the
- * branch fails fast with a configuration error rather than degrading silently.
+ * The real branch of `createProviderRegistry` binds the Gmail REST adapter
+ * (task 2b). It needs OAuth client credentials plus a default mailbox identity,
+ * supplied by the caller from parsed config (never `process.env` here — see
+ * `config.ts`). Absent that config the branch fails fast with a configuration
+ * error rather than degrading silently.
+ *
+ * The real telephony/ASR/AI adapters are NOT part of that Gmail-gated registry:
+ * they are bound per family by `createRealTelephonyProvider` /
+ * `createRealASRProvider` / `createRealAIProvider` below, so each vendor
+ * credential gates exactly its own feature (D-061 posture: a missing credential
+ * pauses the feature, never the boot).
  */
 
 /**
@@ -41,8 +60,10 @@ export interface GmailBindingConfig {
 
 export interface ProviderRegistry {
   email: EmailProvider;
-  /** All bound under mockMode; the real Twilio/Deepgram/Haiku adapters are wired
-   *  at the deploy composition root (they need accounts — see deploy/WIRING.md). */
+  /** All bound under mockMode. In real mode the composition root binds the real
+   *  Twilio/Deepgram/Haiku adapters PER FAMILY via `createRealTelephonyProvider`
+   *  / `createRealASRProvider` / `createRealAIProvider` below — independent of
+   *  this (Gmail-gated) registry, so a Gmail-less deploy can still dial. */
   telephony?: TelephonyProvider;
   asr?: ASRProvider;
   ai?: AIProvider;
@@ -89,6 +110,81 @@ export function createProviderRegistry(
       ...(config.gmail.scopes !== undefined ? { scopes: config.gmail.scopes } : {}),
     }),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Real comms adapters (telephony / ASR / AI) — the non-email adapter line
+// ---------------------------------------------------------------------------
+
+/**
+ * These factories are the ONLY place the real Twilio/Deepgram/Haiku adapters are
+ * constructed. Each binds its production fetch transport explicitly (the
+ * adapters take `transport` as REQUIRED config — there is no default, so a
+ * caller that forgets it is a type error, not a runtime surprise).
+ *
+ * Every field a factory takes is required-and-complete on purpose: the D-061
+ * lesson is that a half-configured adapter that constructs fine and then throws
+ * per-request is the worst failure mode. The composition root (`main.ts
+ * buildRegistries`) calls these only when the FULL credential set for the
+ * family is present; a wholly absent family stays `null` (feature paused, boot
+ * fine) and a partial one refuses the boot (assertRealModeConfig).
+ *
+ * NONE of these adapters has ever been exercised against a live vendor account
+ * — only transport-injected unit tests (HUMAN_TODO: Twilio/Deepgram/Anthropic
+ * accounts).
+ */
+
+export interface TwilioBindingConfig {
+  accountSid: string;
+  /** Auth token — HMAC key for webhook verification + REST Basic-auth fallback. */
+  authToken: string;
+  /**
+   * Public origin (scheme + host, no trailing slash) Twilio calls back to.
+   * `/wh/twilio/{voice,status}` URLs are derived from it; Twilio signs the FULL
+   * public URL, so this must be the external origin, never the proxy host.
+   */
+  publicBaseUrl: string;
+  /** Optional REST API-key pair — set BOTH or NEITHER (Basic-auth username+password). */
+  apiKeySid?: string;
+  apiKeySecret?: string;
+}
+
+export function createRealTelephonyProvider(binding: TwilioBindingConfig): TelephonyProvider {
+  const base = binding.publicBaseUrl.replace(/\/+$/, '');
+  return createTwilioTelephonyProvider({
+    accountSid: binding.accountSid,
+    authToken: binding.authToken,
+    transport: new FetchTwilioTransport(),
+    // Outbound dial TwiML + voice/recording/SMS status callbacks (CONTRACTS §C7
+    // routes). One /status endpoint serves voice, recording and SMS callbacks.
+    voiceUrl: `${base}/wh/twilio/voice`,
+    statusCallbackUrl: `${base}/wh/twilio/status`,
+    smsStatusCallbackUrl: `${base}/wh/twilio/status`,
+    ...(binding.apiKeySid !== undefined ? { apiKeySid: binding.apiKeySid } : {}),
+    ...(binding.apiKeySecret !== undefined ? { apiKeySecret: binding.apiKeySecret } : {}),
+  });
+}
+
+export interface DeepgramBindingConfig {
+  apiKey: string;
+}
+
+export function createRealASRProvider(binding: DeepgramBindingConfig): ASRProvider {
+  return createDeepgramASRProvider({
+    apiKey: binding.apiKey,
+    transport: new FetchDeepgramTransport(),
+  });
+}
+
+export interface AnthropicBindingConfig {
+  apiKey: string;
+}
+
+export function createRealAIProvider(binding: AnthropicBindingConfig): AIProvider {
+  return createHaikuAIProvider({
+    apiKey: binding.apiKey,
+    transport: new FetchAnthropicTransport(),
+  });
 }
 
 // ---------------------------------------------------------------------------

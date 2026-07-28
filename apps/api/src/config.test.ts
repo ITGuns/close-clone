@@ -162,6 +162,66 @@ test('non-production keeps a weak GMAIL_PUSH_TOKEN working (dev/test)', () => {
   expect(loadConfig({ NODE_ENV: 'test', GMAIL_PUSH_TOKEN: 'tok' }).gmailPushToken).toBe('tok');
 });
 
+// ── Real-mode provider credentials: parsed once here, never read from
+// process.env elsewhere. Absent OR a blank env line ⇒ null ⇒ feature paused
+// (partial-Twilio boot refusal lives in main.ts assertRealModeConfig). ────────
+
+test('provider credentials default to null with an empty env', () => {
+  const config = loadConfig({});
+  expect(config.twilioAccountSid).toBeNull();
+  expect(config.twilioAuthToken).toBeNull();
+  expect(config.twilioApiKeySid).toBeNull();
+  expect(config.twilioApiKeySecret).toBeNull();
+  expect(config.twilioPhoneNumber).toBeNull();
+  expect(config.deepgramApiKey).toBeNull();
+  expect(config.anthropicApiKey).toBeNull();
+  expect(config.publicWebhookUrl).toBeNull();
+});
+
+test('provider credentials pass through when set', () => {
+  const config = loadConfig({
+    TWILIO_ACCOUNT_SID: 'ACx',
+    TWILIO_AUTH_TOKEN: 'tok',
+    TWILIO_API_KEY_SID: 'SKx',
+    TWILIO_API_KEY_SECRET: 'shh',
+    TWILIO_PHONE_NUMBER: '+15550001111',
+    DEEPGRAM_API_KEY: 'dg',
+    ANTHROPIC_API_KEY: 'sk-ant',
+    PUBLIC_WEBHOOK_URL: 'https://crm.example.com',
+  });
+  expect(config.twilioAccountSid).toBe('ACx');
+  expect(config.twilioAuthToken).toBe('tok');
+  expect(config.twilioApiKeySid).toBe('SKx');
+  expect(config.twilioApiKeySecret).toBe('shh');
+  expect(config.twilioPhoneNumber).toBe('+15550001111');
+  expect(config.deepgramApiKey).toBe('dg');
+  expect(config.anthropicApiKey).toBe('sk-ant');
+  expect(config.publicWebhookUrl).toBe('https://crm.example.com');
+});
+
+test('a blank provider env line is unset, not an empty-string credential (D-061)', () => {
+  // .env.example ships every one of these as `VAR=` — an untouched env file
+  // must pause the features, never construct an adapter keyed by ''.
+  const config = loadConfig({
+    TWILIO_ACCOUNT_SID: '',
+    TWILIO_AUTH_TOKEN: '',
+    TWILIO_API_KEY_SID: '',
+    TWILIO_API_KEY_SECRET: '',
+    TWILIO_PHONE_NUMBER: '',
+    DEEPGRAM_API_KEY: '',
+    ANTHROPIC_API_KEY: '',
+    PUBLIC_WEBHOOK_URL: '',
+  });
+  expect(config.twilioAccountSid).toBeNull();
+  expect(config.twilioAuthToken).toBeNull();
+  expect(config.twilioApiKeySid).toBeNull();
+  expect(config.twilioApiKeySecret).toBeNull();
+  expect(config.twilioPhoneNumber).toBeNull();
+  expect(config.deepgramApiKey).toBeNull();
+  expect(config.anthropicApiKey).toBeNull();
+  expect(config.publicWebhookUrl).toBeNull();
+});
+
 test('mock mode / non-production boots without LIST_UNSUBSCRIBE_SECRET (dev default, distinct from session dev default)', () => {
   const dev = loadConfig({});
   expect(dev.listUnsubscribeSecret).toBe('dev-insecure-unsubscribe-secret');

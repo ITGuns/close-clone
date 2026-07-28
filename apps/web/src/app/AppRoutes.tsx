@@ -76,8 +76,14 @@ function BootFallback(): JSX.Element {
  * unaffected — RequireAuth still sends them through /login with a return path.
  */
 function RootGate(): JSX.Element {
-  const { user } = useAuth();
-  return <Navigate to={user ? '/inbox' : '/welcome'} replace />;
+  const { status } = useAuth();
+  // Gate on `status`, never on `user` alone. In real mode identity is resolved by
+  // a round-trip to /auth/me, so `user` is legitimately null while that is still
+  // in flight — deciding then would send a signed-in rep to the marketing page.
+  // Same defect class as the login loop this replaced: treating "not yet known"
+  // as "not signed in". Hold until the answer arrives.
+  if (status === 'unknown') return <BootFallback />;
+  return <Navigate to={status === 'authenticated' ? '/inbox' : '/welcome'} replace />;
 }
 
 export function AppRoutes(): JSX.Element {

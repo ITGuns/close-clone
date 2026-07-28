@@ -13,7 +13,6 @@ import { CSRF_HEADER } from '../auth/csrf.ts';
 
 const DEFAULT_ALLOWED = ['http://localhost:5173', 'http://127.0.0.1:5173'] as const;
 
-
 const ALLOW_METHODS = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
 // `x-switchboard-csrf` is non-negotiable here: the session guard rejects every
 // mutating request without it (auth/csrf.ts), and the web client now sends it on

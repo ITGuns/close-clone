@@ -47,7 +47,7 @@ docker compose -f deploy/docker-compose.yml up -d --build
 > **The env file that matters is `deploy/.env`** — note the path. With
 > `-f deploy/docker-compose.yml` and no `--project-directory`, Compose takes
 > `deploy/` as the project directory, so `deploy/.env` is what it auto-loads for
-> `${VAR}` substitution *and* what the api service's `env_file: .env` resolves
+> `${VAR}` substitution _and_ what the api service's `env_file: .env` resolves
 > to. A `.env` at the repo root is **not** read by this stack. (The root
 > `.env.example` documents the same variables for a non-compose / local run.)
 
@@ -78,22 +78,22 @@ docker compose -f deploy/docker-compose.yml down -v       # ALSO delete volumes 
 | `DATABASE_URL`                                               | api            | yes                               | Auto-derived to in-cluster postgres; set only to use an external DB.                           |
 | `REDIS_URL`                                                  | api            | no                                | Auto-derived to in-cluster redis; set only for external Redis.                                 |
 | `SESSION_SECRET`                                             | api            | **yes**                           | Signs sessions AND derives the OAuth-token encryption key. Rotating it forces mailbox re-auth. |
-| `LIST_UNSUBSCRIBE_SECRET`                                    | api            | **yes**                           | Signs one-click unsubscribe tokens (I-SEND-5). Must differ from `SESSION_SECRET`.               |
-| `LOG_LEVEL`                                                  | api            | no                                | pino level (`fatal`…`trace`), default `info`. Logs rotate at 10 MiB × 5 per container.          |
-| `APP_VERSION`                                                | api            | no                                | `/healthz` `version` + error-sink `release`. Leave commented if unused (blank ⇒ `""`).          |
+| `LIST_UNSUBSCRIBE_SECRET`                                    | api            | **yes**                           | Signs one-click unsubscribe tokens (I-SEND-5). Must differ from `SESSION_SECRET`.              |
+| `LOG_LEVEL`                                                  | api            | no                                | pino level (`fatal`…`trace`), default `info`. Logs rotate at 10 MiB × 5 per container.         |
+| `APP_VERSION`                                                | api            | no                                | `/healthz` `version` + error-sink `release`. Leave commented if unused (blank ⇒ `""`).         |
 | `IMPORT_STORAGE_DIR`                                         | api            | no                                | Uploaded raw CSVs. **Compose sets it and mounts the `importdata` volume there.**               |
 | `TMPDIR`                                                     | api            | no                                | Admin exports live under it. **Compose sets it and mounts `exportdata` there.** See below.     |
-| `SENTRY_DSN`                                                 | api            | **yes**                           | Sentry-protocol error sink; unset/malformed ⇒ console. GlitchTip DSNs work.                     |
+| `SENTRY_DSN`                                                 | api            | **yes**                           | Sentry-protocol error sink; unset/malformed ⇒ console. GlitchTip DSNs work.                    |
 | `OIDC_ISSUER` / `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET`      | api            | secret=client secret              | Company SSO. Groups `sales-crm-users` / `sales-crm-admins`. Dev-login stub covers until set.   |
-| `WEB_ORIGIN`                                                 | api            | no                                | Front-door origin; builds the OIDC `redirect_uri` + post-login redirect. Set it with `OIDC_*`.  |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`                  | api            | secret=secret                     | Gmail two-way sync (real mode). The only real provider adapter that is wired.                   |
-| `GMAIL_SENDER_ADDRESS`                                       | api            | no                                | Default From / Message-ID domain for the real Gmail adapter.                                    |
-| `GMAIL_PUSH_TOKEN`                                           | api            | **yes**                           | Authenticates `POST /wh/gmail`. **Boot fails** when `MOCK_MODE=0` + `GOOGLE_CLIENT_ID` is set.  |
-| `UNSUBSCRIBE_MAILBOX`                                        | api            | no                                | `List-Unsubscribe` mailto. Default `unsubscribe@switchboard.internal` is NOT deliverable.       |
-| `PUBLIC_WEBHOOK_URL`                                         | api            | no                                | Public HTTPS the proxy forwards to `/wh/*`. Also the unsubscribe-link base.                     |
-| `ANTHROPIC_API_KEY`                                          | api            | **yes**                           | **NOT WIRED** — see "Not-yet-wired providers" below. Setting it enables nothing.                 |
-| `TWILIO_*` (5)                                               | api            | secret=auth token, api-key secret | **NOT WIRED** — see "Not-yet-wired providers" below. Setting it enables nothing.                 |
-| `DEEPGRAM_API_KEY`                                           | api            | **yes**                           | **NOT WIRED** — see "Not-yet-wired providers" below. Setting it enables nothing.                 |
+| `WEB_ORIGIN`                                                 | api            | no                                | Front-door origin; builds the OIDC `redirect_uri` + post-login redirect. Set it with `OIDC_*`. |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`                  | api            | secret=secret                     | Gmail two-way sync (real mode). The only real provider adapter that is wired.                  |
+| `GMAIL_SENDER_ADDRESS`                                       | api            | no                                | Default From / Message-ID domain for the real Gmail adapter.                                   |
+| `GMAIL_PUSH_TOKEN`                                           | api            | **yes**                           | Authenticates `POST /wh/gmail`. **Boot fails** when `MOCK_MODE=0` + `GOOGLE_CLIENT_ID` is set. |
+| `UNSUBSCRIBE_MAILBOX`                                        | api            | no                                | `List-Unsubscribe` mailto. Default `unsubscribe@switchboard.internal` is NOT deliverable.      |
+| `PUBLIC_WEBHOOK_URL`                                         | api            | no                                | Public HTTPS the proxy forwards to `/wh/*`. Also the unsubscribe-link base.                    |
+| `ANTHROPIC_API_KEY`                                          | api            | **yes**                           | **NOT WIRED** — see "Not-yet-wired providers" below. Setting it enables nothing.               |
+| `TWILIO_*` (5)                                               | api            | secret=auth token, api-key secret | **NOT WIRED** — see "Not-yet-wired providers" below. Setting it enables nothing.               |
+| `DEEPGRAM_API_KEY`                                           | api            | **yes**                           | **NOT WIRED** — see "Not-yet-wired providers" below. Setting it enables nothing.               |
 | `GLITCHTIP_SECRET_KEY`                                       | glitchtip      | **yes**                           | Only if the `glitchtip` profile is enabled.                                                    |
 | `GLITCHTIP_DB` / `GLITCHTIP_DOMAIN` / `GLITCHTIP_FROM_EMAIL` | glitchtip      | no                                | GlitchTip config.                                                                              |
 | `BACKUP_DIR` / `BACKUP_RETENTION`                            | backup scripts | no                                | Override backup location / retention (default N=14).                                           |
@@ -109,7 +109,7 @@ token is the only thing authenticating it — before that token existed the
 endpoint accepted any well-formed JSON from anyone who found the URL.
 
 - **Unused under `MOCK_MODE=1`.** Nothing to set for a mock bring-up.
-- **Required before boot when `MOCK_MODE=0` *and* `GOOGLE_CLIENT_ID` is set** —
+- **Required before boot when `MOCK_MODE=0` _and_ `GOOGLE_CLIENT_ID` is set** —
   the composition root throws rather than mounting the webhook unauthenticated.
   A real-mode deploy with no Gmail integration may leave it unset.
 - **≥32 chars in production**, same floor as `SESSION_SECRET` /
@@ -148,7 +148,7 @@ switch-on is a registry change rather than an env archaeology dig. The real
 adapters plus the accounts they need are tracked in `HUMAN_TODO.md` /
 `WIRING.md` §5. Until they land, exercise those features with `MOCK_MODE=1`.
 
-(`TWILIO_AUTH_TOKEN` and `TWILIO_PHONE_NUMBER` *are* read by the composition
+(`TWILIO_AUTH_TOKEN` and `TWILIO_PHONE_NUMBER` _are_ read by the composition
 root — but only inside the branch guarded on a telephony provider existing,
 which in real mode it does not. Mock mode uses a fixed test token, not yours.)
 
@@ -208,13 +208,13 @@ memory limit sized for a small VM (honoured by `docker compose up` in Compose v2
 
 ## Persistent state (named volumes)
 
-| Volume       | Mounted at                       | Holds                          | Losing it costs you                                              |
-| ------------ | -------------------------------- | ------------------------------ | ---------------------------------------------------------------- |
-| `pgdata`     | `postgres:/var/lib/postgresql/data`      | The database.          | Everything. This is the source of truth.                          |
-| `pgwal`      | `postgres:/var/lib/postgresql/wal-archive` | Archived WAL (PITR base). | Point-in-time recovery beyond the last dump.                      |
-| `redisdata`  | `redis:/data`                    | BullMQ AOF.                    | Nothing correctness-wise — every job is re-derivable from PG.      |
-| `importdata` | `api`,`worker:/var/lib/switchboard/imports` | Uploaded raw CSVs.  | In-flight imports (see below).                                    |
-| `exportdata` | `api`,`worker:/var/lib/switchboard/tmp` | `TMPDIR`; admin export output. | Completed export bundles.                                    |
+| Volume       | Mounted at                                  | Holds                          | Losing it costs you                                           |
+| ------------ | ------------------------------------------- | ------------------------------ | ------------------------------------------------------------- |
+| `pgdata`     | `postgres:/var/lib/postgresql/data`         | The database.                  | Everything. This is the source of truth.                      |
+| `pgwal`      | `postgres:/var/lib/postgresql/wal-archive`  | Archived WAL (PITR base).      | Point-in-time recovery beyond the last dump.                  |
+| `redisdata`  | `redis:/data`                               | BullMQ AOF.                    | Nothing correctness-wise — every job is re-derivable from PG. |
+| `importdata` | `api`,`worker:/var/lib/switchboard/imports` | Uploaded raw CSVs.             | In-flight imports (see below).                                |
+| `exportdata` | `api`,`worker:/var/lib/switchboard/tmp`     | `TMPDIR`; admin export output. | Completed export bundles.                                     |
 
 **Why imports need a volume.** The import lifecycle spans three separate HTTP
 requests: `POST /api/v1/imports` **writes** the CSV, `POST /api/v1/imports/:id/dry-run`
@@ -261,7 +261,7 @@ request. On a small VM that fills the disk and takes Postgres down with it, so
 every service in the compose file carries:
 
 ```yaml
-logging: *default-logging   # json-file, max-size 10m, max-file 5
+logging: *default-logging # json-file, max-size 10m, max-file 5
 ```
 
 That caps each container at 50 MiB (~450 MiB with every profile enabled). If you

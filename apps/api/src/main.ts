@@ -1,7 +1,11 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import Fastify, { type FastifyInstance, type preHandlerHookHandler } from 'fastify';
+import Fastify, {
+  type FastifyInstance,
+  type FastifyRequest,
+  type preHandlerHookHandler,
+} from 'fastify';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { sql } from 'drizzle-orm';
@@ -10,20 +14,26 @@ import { Queue } from 'bullmq';
 
 import { loadConfig, type AppConfig } from './config.ts';
 import type { Db } from './db/index.ts';
-import { registerRoutes } from './routes/index.ts';
+import { orgSettings } from './db/schema.ts';
+import { registerRoutes, sendError } from './routes/index.ts';
+import type { ActivityWebhookEmitter } from './services/activity/index.ts';
 import {
   createProviderRegistry,
   createEmailSenderRegistry,
+  createRealTelephonyProvider,
+  createRealASRProvider,
+  createRealAIProvider,
   type ProviderRegistry,
   type EmailSenderRegistry,
 } from './providers/registry.ts';
+import type { TelephonyProvider, ASRProvider, AIProvider } from '@switchboard/shared/providers';
+import type { TelephonyRouteDeps } from './routes/telephony.ts';
+import type { SmsRouteDeps } from './routes/sms.ts';
+import type { AiRouteDeps } from './routes/ai.ts';
 import { createBullmqQueueDriver } from './queue/index.ts';
 import type { QueueDriver } from './queue/index.ts';
 import { TokenCipher } from './services/sync/token-cipher.ts';
-import {
-  SharedTokenGmailPushVerifier,
-  type GmailPushVerifier,
-} from './services/sync/webhook.ts';
+import { SharedTokenGmailPushVerifier, type GmailPushVerifier } from './services/sync/webhook.ts';
 import { ImportStorage } from './services/imports/storage.ts';
 import { sweepDueIntents } from './services/sequences/sweeper.ts';
 import { processIntent } from './services/sequences/dispatch.ts';
@@ -170,38 +180,196 @@ export function assertRealModeConfig(config: AppConfig, env: NodeJS.ProcessEnv):
         'Set it, or unset GOOGLE_CLIENT_ID to run without Gmail sync.',
     );
   }
+  // Telephony follows the same posture as Gmail (D-061): WHOLLY absent ⇒ the
+  // calls/SMS surface simply never mounts and the boot proceeds; PARTIALLY
+  // present ⇒ refuse to boot naming the missing keys. Any TWILIO_* var set is
+  // the operator signalling intent — booting with only some of the set would
+  // either mount routes that fail per-request (the D-061 email-send bug) or
+  // silently drop the feature the operator just configured.
+  const twilioTouched = [
+    config.twilioAccountSid,
+    config.twilioAuthToken,
+    config.twilioApiKeySid,
+    config.twilioApiKeySecret,
+    config.twilioPhoneNumber,
+  ].some((v) => v !== null);
+  if (twilioTouched) {
+    const missingTwilio: string[] = [];
+    if (config.twilioAccountSid === null) missingTwilio.push('TWILIO_ACCOUNT_SID');
+    if (config.twilioAuthToken === null) missingTwilio.push('TWILIO_AUTH_TOKEN');
+    // Without a default caller-id every UI dial fails per-request and every
+    // sequence SMS step skips — a half-alive feature, so it is part of the set.
+    if (config.twilioPhoneNumber === null) missingTwilio.push('TWILIO_PHONE_NUMBER');
+    // Twilio signs the FULL public URL. With the localhost fallback every
+    // inbound /wh/twilio webhook fails verification — including STOP opt-outs,
+    // which MUST ingest (§4.5) — so telephony without a public origin is a
+    // compliance hazard, not a degraded mode.
+    if (config.publicWebhookUrl === null) missingTwilio.push('PUBLIC_WEBHOOK_URL');
+    if (missingTwilio.length > 0) {
+      throw new Error(
+        `MOCK_MODE=0 with a partial Twilio config: ${missingTwilio.join(', ')} unset. ` +
+          'Telephony mounts only fully configured — set them (HUMAN_TODO.md → Twilio), ' +
+          'or unset every TWILIO_* var to run without calling/SMS.',
+      );
+    }
+    // The REST API-key pair is optional but indivisible: apiKeySid without its
+    // secret makes every Twilio REST call Basic-auth with an empty password —
+    // constructs fine, 401s per-request.
+    if ((config.twilioApiKeySid === null) !== (config.twilioApiKeySecret === null)) {
+      throw new Error(
+        'TWILIO_API_KEY_SID and TWILIO_API_KEY_SECRET must be set together ' +
+          '(they are a Basic-auth username/password pair); set both or neither.',
+      );
+    }
+  }
 }
 
 /**
- * Provider registries for the composition root. Gmail gates ONLY email /
- * sequence-email — a missing Google account pauses that feature, never the boot
- * (guide §1/§4.6): the eager registry is built only when Gmail is configured, so
- * SSO, leads, pipeline etc. run without it.
+ * Provider registries for the composition root. Each vendor credential gates
+ * ONLY its own feature — a missing account pauses that feature, never the boot
+ * (guide §1/§4.6, D-061):
  *
- * BOTH registries receive the same `gmail` binding. The sender registry is lazy
- * about WHEN it fails (per send, not at construction) but it still needs the
+ *  - Gmail gates email / sequence-email: the eager registry is built only when
+ *    Gmail is configured, so SSO, leads, pipeline etc. run without it.
+ *  - Twilio gates telephony (calls + SMS + /wh/twilio), Deepgram gates ASR,
+ *    Anthropic gates AI — each built independently of Gmail AND of each other,
+ *    so a Gmail-less deploy can still dial. `null` ⇒ paused ⇒ the routes that
+ *    need it are simply not mounted.
+ *
+ * BOTH email registries receive the same `gmail` binding. The sender registry is
+ * lazy about WHEN it fails (per send, not at construction) but it still needs the
  * OAuth config to build a real provider — constructing it without `gmail` made
  * every real-mode send throw `real email provider requires gmail OAuth config`.
+ *
+ * Telephony construction re-checks the FULL credential set even though
+ * `assertRealModeConfig` already refused a partial one — same belt-and-braces as
+ * `buildGmailPushVerifier`: a half-configured adapter that boots and throws
+ * per-request must be unconstructible even if a future caller skips the gate.
  */
 export interface BuiltRegistries {
   registry: ProviderRegistry | null;
   senderRegistry: EmailSenderRegistry;
+  telephony: TelephonyProvider | null;
+  asr: ASRProvider | null;
+  ai: AIProvider | null;
 }
 
 export function buildRegistries(config: AppConfig, env: NodeJS.ProcessEnv): BuiltRegistries {
-  const gmailConfigured = config.mockMode || (env['GOOGLE_CLIENT_ID'] ?? '') !== '';
-  const gmail =
-    !config.mockMode && gmailConfigured
-      ? {
-          clientId: env['GOOGLE_CLIENT_ID']!,
-          clientSecret: env['GOOGLE_CLIENT_SECRET'] ?? '',
-          address: env['GMAIL_SENDER_ADDRESS'] ?? '',
-        }
-      : undefined;
-  const registryConfig = { mockMode: config.mockMode, ...(gmail !== undefined ? { gmail } : {}) };
+  if (config.mockMode) {
+    const registryConfig = { mockMode: true };
+    // ONE mock registry: routes and workers must share instances (the mocks keep
+    // per-instance state — idempotency ledgers, call counts).
+    const registry = createProviderRegistry(registryConfig);
+    return {
+      registry,
+      senderRegistry: createEmailSenderRegistry(registryConfig),
+      telephony: registry.telephony ?? null,
+      asr: registry.asr ?? null,
+      ai: registry.ai ?? null,
+    };
+  }
+  const gmailConfigured = (env['GOOGLE_CLIENT_ID'] ?? '') !== '';
+  const gmail = gmailConfigured
+    ? {
+        clientId: env['GOOGLE_CLIENT_ID']!,
+        clientSecret: env['GOOGLE_CLIENT_SECRET'] ?? '',
+        address: env['GMAIL_SENDER_ADDRESS'] ?? '',
+      }
+    : undefined;
+  const registryConfig = { mockMode: false, ...(gmail !== undefined ? { gmail } : {}) };
   return {
     registry: gmailConfigured ? createProviderRegistry(registryConfig) : null,
     senderRegistry: createEmailSenderRegistry(registryConfig),
+    telephony: realTelephonyFromConfig(config),
+    asr:
+      config.deepgramApiKey !== null
+        ? createRealASRProvider({ apiKey: config.deepgramApiKey })
+        : null,
+    ai:
+      config.anthropicApiKey !== null
+        ? createRealAIProvider({ apiKey: config.anthropicApiKey })
+        : null,
+  };
+}
+
+/**
+ * Real Twilio adapter iff the FULL credential set is present; otherwise null
+ * (feature paused). Destructured locals so TypeScript narrows each field —
+ * and so a partial set can never reach the adapter constructor.
+ */
+function realTelephonyFromConfig(config: AppConfig): TelephonyProvider | null {
+  const { twilioAccountSid, twilioAuthToken, twilioPhoneNumber, publicWebhookUrl } = config;
+  if (
+    twilioAccountSid === null ||
+    twilioAuthToken === null ||
+    twilioPhoneNumber === null ||
+    publicWebhookUrl === null
+  ) {
+    return null;
+  }
+  const { twilioApiKeySid, twilioApiKeySecret } = config;
+  return createRealTelephonyProvider({
+    accountSid: twilioAccountSid,
+    authToken: twilioAuthToken,
+    publicBaseUrl: publicWebhookUrl,
+    ...(twilioApiKeySid !== null && twilioApiKeySecret !== null
+      ? { apiKeySid: twilioApiKeySid, apiKeySecret: twilioApiKeySecret }
+      : {}),
+  });
+}
+
+/**
+ * Comms route deps from the built providers — extracted so the mount decision is
+ * testable without pg/redis (same rationale as `buildRegistries`). A key is
+ * present iff its provider exists; `registerRoutes` mounts a family iff its key
+ * is present, so "provider null ⇒ routes absent" is exactly this function.
+ *
+ * `/api/v1/ai/*` needs BOTH asr and ai (`AiRouteDeps` requires the pair — call
+ * summaries run ASR→AI). One key without the other mounts nothing; the boot
+ * warns (see buildProductionApp) rather than failing, because each key alone is
+ * a complete config for its own vendor.
+ */
+export interface CommsRouteDeps {
+  telephony?: Omit<TelephonyRouteDeps, 'db'>;
+  sms?: Omit<SmsRouteDeps, 'db'>;
+  ai?: Omit<AiRouteDeps, 'db'>;
+}
+
+export function buildCommsRouteDeps(
+  config: AppConfig,
+  built: Pick<BuiltRegistries, 'telephony' | 'asr' | 'ai'>,
+  queue: QueueDriver,
+): CommsRouteDeps {
+  const publicBaseUrl = config.publicWebhookUrl ?? `http://localhost:${config.port}`;
+  return {
+    // Telephony (click-to-call + dialer, /wh/twilio ingress) and two-way SMS
+    // mount only when a telephony provider exists — mock always; real iff the
+    // full Twilio set was configured (buildRegistries). Twilio signs the FULL
+    // public URL, so publicBaseUrl must be the external origin, never the proxy
+    // host (assertRealModeConfig requires PUBLIC_WEBHOOK_URL with telephony).
+    ...(built.telephony !== null
+      ? {
+          telephony: {
+            verifier: new SignatureTwilioVerifier(
+              config.mockMode ? MOCK_TWILIO_AUTH_TOKEN : (config.twilioAuthToken ?? ''),
+            ),
+            dialProvider: built.telephony,
+            now: (): Date => new Date(),
+            publicBaseUrl,
+            queue,
+            ...(config.twilioPhoneNumber !== null ? { callerId: config.twilioPhoneNumber } : {}),
+          },
+          sms: {
+            provider: built.telephony,
+            now: (): Date => new Date(),
+            ...(config.twilioPhoneNumber !== null ? { fromNumber: config.twilioPhoneNumber } : {}),
+          },
+        }
+      : {}),
+    // AI (summaries, drafting, NL→Smart View) needs the ASR+AI pair.
+    ...(built.asr !== null && built.ai !== null
+      ? { ai: { asr: built.asr, ai: built.ai, now: (): Date => new Date() } }
+      : {}),
   };
 }
 
@@ -224,6 +392,177 @@ export function buildGmailPushVerifier(config: AppConfig): GmailPushVerifier {
     );
   }
   return new SharedTokenGmailPushVerifier({ requiredToken: config.gmailPushToken });
+}
+
+/**
+ * `defaultUserId` sentinel for the smart-views/bulk deps. Those routes REQUIRE a
+ * fallback actor id, but in production the fallback must be unreachable: both
+ * surfaces run behind {@link requireHumanActor}, which rejects any request that
+ * did not resolve to a session user BEFORE the handler can consult the fallback.
+ * The nil-v4 value is deliberately not a real user: if a future change ever
+ * removes the guard, writes attribute to a nonexistent user and fail the FK —
+ * loud — instead of silently impersonating someone (dev's `defaultUserId` is a
+ * dev-only convenience that must never reach this root).
+ */
+export const NO_SESSION_ACTOR_SENTINEL = '00000000-0000-4000-8000-000000000000';
+
+/**
+ * Production guard for actor-attributed surfaces (smart-views, bulk): the request
+ * must carry a resolved SESSION user (`request.user`, set by the global
+ * `requireSession` gate). Bearer API tokens pass the global gate but are machine
+ * principals with no user identity — smart views are per-user objects (`me`
+ * binding, create ownership) and bulk is a bulk-WRITE surface whose every event
+ * is attributed to an acting human, so tokens are refused here the same way the
+ * admin/* surface is session-only (a deliberately safe limitation, not an
+ * oversight). 403 (authenticated but not permitted), never 401.
+ */
+export const requireHumanActor: preHandlerHookHandler = async (request, reply) => {
+  if (request.user === undefined) {
+    return sendError(
+      reply,
+      'FORBIDDEN',
+      'this endpoint requires a signed-in user session; API tokens carry no user identity',
+    );
+  }
+  return undefined;
+};
+
+/**
+ * Org timezone for Smart View / bulk relative-date resolution (CONTRACTS C3),
+ * read from `org_settings.company_timezone` at boot. Registration-time snapshot:
+ * an admin PATCH of org-settings takes effect on the next process restart (same
+ * class of tradeoff as every other registration-time dep here). Falls back to
+ * the schema default 'UTC' when no org_settings row exists yet.
+ */
+export async function loadOrgTimezone(db: Db): Promise<string> {
+  const rows = await db.select({ tz: orgSettings.companyTimezone }).from(orgSettings).limit(1);
+  return rows[0]?.tz ?? 'UTC';
+}
+
+/**
+ * Everything `registerProductionRoutes` needs beyond the app. Extracted so the
+ * FULL production route surface is composable with a stub db/queue — the
+ * route-mount manifest suite in main.test.ts registers exactly this function and
+ * asserts every `routes/*.ts` module is mounted or deliberately gated. This is
+ * the drift-stopper for the "works in dev/boot.ts, 404s in the container" class
+ * of bug (smart-views/bulk, sms/send): dev and production may wire differently,
+ * but production's wiring is now itself under test.
+ */
+export interface ProductionRouteWiring {
+  config: AppConfig;
+  built: BuiltRegistries;
+  db: Db;
+  queue: QueueDriver;
+  cipher: TokenCipher;
+  adminGuard: preHandlerHookHandler;
+  activityEmitter: ActivityWebhookEmitter;
+  orgTimezone: string;
+  importStorageDir: string;
+}
+
+/**
+ * THE production route surface: every `routes/*.ts` registrar mounts here (or is
+ * deliberately absent per the feature gates named in buildRegistries /
+ * buildCommsRouteDeps). `buildProductionApp` calls this with real infra; the
+ * manifest suite calls it with stubs. Auth-session routes (OIDC/dev-login) are
+ * NOT here — they are mode-specific and live with the session gate in
+ * buildProductionApp.
+ */
+export function registerProductionRoutes(
+  app: FastifyInstance,
+  wiring: ProductionRouteWiring,
+): void {
+  const { config, built, db, queue, cipher, adminGuard, activityEmitter } = wiring;
+
+  // The session actor, exactly as the global requireSession gate resolved it.
+  const getSessionActor = (request: FastifyRequest): { userId: string } | null =>
+    request.user !== undefined ? { userId: request.user.id } : null;
+
+  registerRoutes(app, {
+    db,
+    emailSend: { providerFor: built.senderRegistry.providerFor, cipher },
+    sequences: { queue, now: () => new Date() },
+    // Validated in loadConfig (fail-closed in production). Deliberately NOT
+    // falling back to sessionSecret: reusing the session key for a different
+    // HMAC purpose is key reuse, and the old `env[...] ?? sessionSecret` read
+    // silently accepted '' from a blank env line as the signing key.
+    unsubscribe: { secret: config.listUnsubscribeSecret },
+    // Email sync routes only when a provider exists (mock, or real + Gmail
+    // configured). Absent → the routes are simply not mounted; the rest of the
+    // API is unaffected.
+    ...(built.registry !== null
+      ? {
+          email: {
+            db,
+            provider: built.registry.email,
+            cipher,
+            verifier: buildGmailPushVerifier(config),
+            redirectUri: `${config.publicWebhookUrl ?? ''}/api/v1/oauth/gmail/callback`,
+            providerName: config.mockMode ? 'mock' : 'gmail',
+          },
+        }
+      : {}),
+    // F4: import is a bulk-write surface (multipart CSV → dry-run → commit) —
+    // never leave it on its injected default. Guard + a real authenticated actor.
+    imports: {
+      storage: new ImportStorage(wiring.importStorageDir),
+      getActor: getSessionActor,
+      preHandler: adminGuard,
+    },
+    adminAudit: { adminGuard },
+    adminExport: { adminGuard },
+    adminCrud: { adminGuard },
+    inbox: { queue },
+    // Smart Views + bulk (the daily-work loop, CONTRACTS §C7): rep surfaces, so
+    // NOT admin-gated — but both take requireHumanActor + the real session actor
+    // (never dev/boot.ts's fixture defaultUserId): `me` binds to the signed-in
+    // rep, creates are owned by them, and every bulk event is attributed to the
+    // human who clicked. The sentinel fallback is unreachable behind the guard.
+    smartViews: {
+      orgTimezone: wiring.orgTimezone,
+      defaultUserId: NO_SESSION_ACTOR_SENTINEL,
+      getActor: getSessionActor,
+      preHandler: requireHumanActor,
+    },
+    bulk: {
+      orgTimezone: wiring.orgTimezone,
+      queue,
+      defaultUserId: NO_SESSION_ACTOR_SENTINEL,
+      getActor: getSessionActor,
+      preHandler: requireHumanActor,
+    },
+    // Fan domain events onto outbound webhooks: activity.recorded stages its
+    // delivery rows inside the record transaction, then enqueues post-commit
+    // through this queue-backed emitter.
+    activityEmitter,
+    // Telephony (click-to-call + SMS, /wh/twilio ingress) + AI (summaries,
+    // drafting, NL→Smart View) mount only when their providers exist — mock
+    // always; real iff the family's credentials are fully configured
+    // (buildRegistries). The mapping lives in buildCommsRouteDeps so it is
+    // testable without pg/redis.
+    ...buildCommsRouteDeps(config, built, queue),
+  });
+
+  // A lone ASR or AI key is a complete config for its vendor (so it must not
+  // fail the boot) but mounts nothing, because /api/v1/ai/* needs the pair —
+  // say so loudly instead of leaving an env archaeology dig.
+  if (!config.mockMode && (built.asr !== null) !== (built.ai !== null)) {
+    app.log.warn(
+      { deepgramConfigured: built.asr !== null, anthropicConfigured: built.ai !== null },
+      '/api/v1/ai/* not mounted: it needs BOTH DEEPGRAM_API_KEY and ANTHROPIC_API_KEY, and only one is set',
+    );
+  }
+
+  // Admin CRUD for the internal API's own credentials: issue/revoke API tokens
+  // and manage outbound webhook subscriptions. Admin-guarded (session-only),
+  // so a token cannot mint or escalate tokens. The acting admin is the session
+  // user (created_by / audit actor).
+  registerAdminTokenRoutes(app, {
+    db,
+    adminGuard,
+    resolveActorId: (request) => request.user?.id ?? null,
+  });
+  registerWebhookSubscriptionRoutes(app, { db, adminGuard });
 }
 
 export interface BuildOptions {
@@ -253,9 +592,10 @@ export async function buildProductionApp(options: BuildOptions = {}): Promise<Bu
   const probeQueue = new Queue('sequences', { connection });
 
   // ── Providers ─────────────────────────────────────────────────────────────
-  // Both registries share the gmail binding — see buildRegistries for why the
-  // sender registry must NOT be built without it.
-  const { registry, senderRegistry } = buildRegistries(config, env);
+  // Both email registries share the gmail binding — see buildRegistries for why
+  // the sender registry must NOT be built without it. telephony/asr/ai are per
+  // family: null ⇒ that feature's routes/workers are simply not wired.
+  const built = buildRegistries(config, env);
   const cipher = new TokenCipher(config.sessionSecret);
 
   // buildLoggerOptions (not `logger: true`): it carries the req/res/err
@@ -353,7 +693,7 @@ export async function buildProductionApp(options: BuildOptions = {}): Promise<Bu
       clientId: env['OIDC_CLIENT_ID']!,
       clientSecret: env['OIDC_CLIENT_SECRET']!,
     });
-    const webOrigin = env['WEB_ORIGIN'] ?? env['PUBLIC_WEBHOOK_URL'] ?? '';
+    const webOrigin = env['WEB_ORIGIN'] ?? config.publicWebhookUrl ?? '';
     registerOidcAuthRoutes(app, {
       db,
       client: oidcClient,
@@ -367,87 +707,24 @@ export async function buildProductionApp(options: BuildOptions = {}): Promise<Bu
 
   // One shared activity→webhook emitter for every producer (routes + the
   // sequence dispatch worker below), so a subscriber sees activity.recorded for
-  // rep CRUD AND for sequence-driven outbound.
+  // rep CRUD AND for sequence-driven outbound. (createWebhookDeliveryProcessor
+  // below delivers what it stages.)
   const activityEmitter = createActivityWebhookEmitter(queue);
 
-  registerRoutes(app, {
+  // The FULL /api/v1 + /wh route surface, in the one function the route-mount
+  // manifest suite (main.test.ts) pins — so a routes/*.ts module that dev/boot.ts
+  // mounts but this root forgets is a failing test, not a deployed 404.
+  registerProductionRoutes(app, {
+    config,
+    built,
     db,
-    emailSend: { providerFor: senderRegistry.providerFor, cipher },
-    sequences: { queue, now: () => new Date() },
-    // Validated in loadConfig (fail-closed in production). Deliberately NOT
-    // falling back to sessionSecret: reusing the session key for a different
-    // HMAC purpose is key reuse, and the old `env[...] ?? sessionSecret` read
-    // silently accepted '' from a blank env line as the signing key.
-    unsubscribe: { secret: config.listUnsubscribeSecret },
-    // Email sync routes only when a provider exists (mock, or real + Gmail
-    // configured). Absent → the routes are simply not mounted; the rest of the
-    // API is unaffected.
-    ...(registry !== null
-      ? {
-          email: {
-            db,
-            provider: registry.email,
-            cipher,
-            verifier: buildGmailPushVerifier(config),
-            redirectUri: `${env['PUBLIC_WEBHOOK_URL'] ?? ''}/api/v1/oauth/gmail/callback`,
-            providerName: config.mockMode ? 'mock' : 'gmail',
-          },
-        }
-      : {}),
-    // F4: import is a bulk-write surface (multipart CSV → dry-run → commit) —
-    // never leave it on its injected default. Guard + a real authenticated actor.
-    imports: {
-      storage: new ImportStorage(env['IMPORT_STORAGE_DIR'] ?? '/var/lib/switchboard/imports'),
-      getActor: (request) => (request.user ? { userId: request.user.id } : null),
-      preHandler: adminGuard,
-    },
-    adminAudit: { adminGuard },
-    adminExport: { adminGuard },
-    adminCrud: { adminGuard },
-    inbox: { queue },
-    // Fan domain events onto outbound webhooks: activity.recorded stages its
-    // delivery rows inside the record transaction, then enqueues post-commit
-    // through this queue-backed emitter (createWebhookDeliveryProcessor above
-    // delivers them). Wired for the notes surface; other activity producers
-    // adopt the same one-param pattern.
-    activityEmitter,
-    // Telephony (click-to-call, /wh/twilio ingress) + AI (summaries, drafting,
-    // NL→Smart View) mount only when their providers exist — mock now; the real
-    // Twilio/Deepgram/Haiku adapters + accounts are HUMAN_TODO (WIRING.md §5),
-    // and the registry real branch builds only email, so in real mode these
-    // stay unmounted until that lands. Twilio signs the FULL public URL, so
-    // publicBaseUrl must be the external origin, never the proxy host.
-    ...(registry?.telephony !== undefined
-      ? {
-          telephony: {
-            verifier: new SignatureTwilioVerifier(
-              config.mockMode ? MOCK_TWILIO_AUTH_TOKEN : (env['TWILIO_AUTH_TOKEN'] ?? ''),
-            ),
-            dialProvider: registry.telephony,
-            now: () => new Date(),
-            publicBaseUrl: env['PUBLIC_WEBHOOK_URL'] ?? `http://localhost:${config.port}`,
-            queue,
-            ...(env['TWILIO_PHONE_NUMBER'] !== undefined
-              ? { callerId: env['TWILIO_PHONE_NUMBER'] }
-              : {}),
-          },
-        }
-      : {}),
-    ...(registry?.asr !== undefined && registry.ai !== undefined
-      ? { ai: { asr: registry.asr, ai: registry.ai, now: () => new Date() } }
-      : {}),
-  });
-
-  // Admin CRUD for the internal API's own credentials: issue/revoke API tokens
-  // and manage outbound webhook subscriptions. Admin-guarded (session-only),
-  // so a token cannot mint or escalate tokens. The acting admin is the session
-  // user (created_by / audit actor).
-  registerAdminTokenRoutes(app, {
-    db,
+    queue,
+    cipher,
     adminGuard,
-    resolveActorId: (request) => request.user?.id ?? null,
+    activityEmitter,
+    orgTimezone: await loadOrgTimezone(db),
+    importStorageDir: env['IMPORT_STORAGE_DIR'] ?? '/var/lib/switchboard/imports',
   });
-  registerWebhookSubscriptionRoutes(app, { db, adminGuard });
 
   // ── Sequence worker: CONSUME the queue, then keep it fed ──────────────────
   // `processIntent` re-checks every rail (reply/bounce/suppression/window/cap)
@@ -455,7 +732,7 @@ export async function buildProductionApp(options: BuildOptions = {}): Promise<Bu
   // turns enqueued intents into actual sends. Without it the sweeper would
   // enqueue into Redis forever and no sequence step would ever go out.
   const unsubscribeConfig = {
-    baseUrl: env['PUBLIC_WEBHOOK_URL'] ?? `http://localhost:${config.port}`,
+    baseUrl: config.publicWebhookUrl ?? `http://localhost:${config.port}`,
     mailbox: env['UNSUBSCRIBE_MAILBOX'] ?? 'unsubscribe@switchboard.internal',
     // Same validated key as the /unsub route above (mint + verify must agree);
     // see loadConfig for the production fail-closed rule.
@@ -463,7 +740,7 @@ export async function buildProductionApp(options: BuildOptions = {}): Promise<Bu
   };
   const dispatchDeps = {
     db,
-    providerFor: senderRegistry.providerFor,
+    providerFor: built.senderRegistry.providerFor,
     cipher,
     queue,
     // Distinguishes this replica in send_intents.worker_id (§4.3 claim audit).
@@ -472,30 +749,26 @@ export async function buildProductionApp(options: BuildOptions = {}): Promise<Bu
     unsubscribe: unsubscribeConfig,
     emitter: activityEmitter,
     sms: {
-      // No telephony account (HUMAN_TODO: TWILIO_*) → no fromNumber either, so
+      // No telephony provider (TWILIO_* unset) → no fromNumber either, so
       // dispatch SKIPs sms steps with `no_sms_from_number` before ever touching
       // this. It exists for the misconfigured case (a number set, credentials
       // missing): refuse loudly → the intent lands FAILED/provider_error with
       // this message, rather than a step silently disappearing.
-      provider: registry?.telephony ?? {
+      provider: built.telephony ?? {
         sendSms: (): Promise<never> => {
           throw new Error('telephony provider not configured (TWILIO_* unset): cannot send SMS');
         },
       },
-      ...(env['TWILIO_PHONE_NUMBER'] !== undefined
-        ? { fromNumber: env['TWILIO_PHONE_NUMBER'] }
-        : {}),
+      ...(config.twilioPhoneNumber !== null ? { fromNumber: config.twilioPhoneNumber } : {}),
     },
   };
   // Telephony ingress: an inbound Twilio webhook persists a webhook_inbox row,
   // then enqueues twilio:process; this worker turns that row into timeline
   // events (call logged, sms received, STOP opt-out). deps.provider only needs
   // sendSms (the quiet-hours opt-out confirmation). Present only when a
-  // telephony provider exists (mock now; real Twilio is HUMAN_TODO).
+  // telephony provider exists (mock always; real iff TWILIO_* fully set).
   const telephonyProcessDeps =
-    registry?.telephony !== undefined
-      ? { db, provider: registry.telephony, emitter: activityEmitter }
-      : null;
+    built.telephony !== null ? { db, provider: built.telephony, emitter: activityEmitter } : null;
 
   // Outbound webhook delivery (guide §5c): emitWebhookEvent (fired by domain
   // events) writes durable webhook_deliveries rows + enqueues webhook:deliver;

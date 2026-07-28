@@ -14,7 +14,11 @@ Everything works with `MOCK_MODE=1` and zero external accounts. Tick items as yo
 
 ## 1. Config (no Docker needed)
 
-- [ ] Copy the env template: `cp .env.example .env`
+- [ ] Copy the env template: `cp deploy/.env.example deploy/.env` (from the repo root).
+      NOT the root `.env` — `docker compose -f deploy/docker-compose.yml` treats
+      `deploy/` as the project directory, so `deploy/.env` is what Compose loads
+      for `${VAR}` substitution and what the api's `env_file: .env` resolves to.
+      A repo-root `.env` is never read by the stack.
 - [ ] Set **`POSTGRES_PASSWORD`** to a strong value.
 - [ ] Set **`SESSION_SECRET`** to a long random value (e.g. `openssl rand -hex 32`).
 - [ ] Leave `MOCK_MODE=1` for the first bring-up (no accounts required).

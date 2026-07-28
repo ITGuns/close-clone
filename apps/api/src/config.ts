@@ -57,7 +57,30 @@ const envSchema = z.object({
   /** Shared token authenticating /wh/gmail pushes. Optional here — real mode
    *  enforces presence when Gmail is configured (main.ts assertRealModeConfig). */
   GMAIL_PUSH_TOKEN: z.string().min(1).optional(),
+  // ── Real-mode provider credentials (all optional: absent ⇒ that FEATURE is
+  // paused, never the boot; PARTIAL Twilio config is refused by main.ts
+  // assertRealModeConfig — see the posture note there). All ignored under
+  // MOCK_MODE=1.
+  TWILIO_ACCOUNT_SID: z.string().min(1).optional(),
+  TWILIO_AUTH_TOKEN: z.string().min(1).optional(),
+  TWILIO_API_KEY_SID: z.string().min(1).optional(),
+  TWILIO_API_KEY_SECRET: z.string().min(1).optional(),
+  TWILIO_PHONE_NUMBER: z.string().min(1).optional(),
+  DEEPGRAM_API_KEY: z.string().min(1).optional(),
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  /** Public origin the proxy forwards to /wh/* (Twilio signs the FULL URL).
+   *  Required by assertRealModeConfig whenever telephony is configured. */
+  PUBLIC_WEBHOOK_URL: z.string().min(1).optional(),
 });
+
+/**
+ * Env-file convention (D-061): a blank `VAR=` line in a compose env_file reaches
+ * the process as '' — treat it exactly like unset, so `??`/default fallbacks fire
+ * instead of '' silently winning.
+ */
+function blankAsUnset(value: string | undefined): string | undefined {
+  return value === '' ? undefined : value;
+}
 
 export interface AppConfig {
   nodeEnv: 'development' | 'test' | 'production';
@@ -69,6 +92,17 @@ export interface AppConfig {
   listUnsubscribeSecret: string;
   /** null ⇒ unset (or blank env line). Real mode + Gmail configured requires it. */
   gmailPushToken: string | null;
+  // Real-mode provider credentials. null ⇒ unset (or blank env line) ⇒ that
+  // feature stays paused in real mode. All unused under MOCK_MODE=1.
+  twilioAccountSid: string | null;
+  twilioAuthToken: string | null;
+  twilioApiKeySid: string | null;
+  twilioApiKeySecret: string | null;
+  twilioPhoneNumber: string | null;
+  deepgramApiKey: string | null;
+  anthropicApiKey: string | null;
+  /** Public origin for /wh/* callbacks + unsubscribe links. null ⇒ unset. */
+  publicWebhookUrl: string | null;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -88,6 +122,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     // Same blank-line convention: '' behaves like unset (→ null, and real mode
     // with Gmail configured then refuses to boot — never a '' shared token).
     GMAIL_PUSH_TOKEN: env.GMAIL_PUSH_TOKEN === '' ? undefined : env.GMAIL_PUSH_TOKEN,
+    // Provider credentials: '' (a blank env line — every one of these ships
+    // commented-in but empty in .env.example) is unset, so an untouched env file
+    // pauses the feature instead of constructing an adapter with '' creds.
+    TWILIO_ACCOUNT_SID: blankAsUnset(env.TWILIO_ACCOUNT_SID),
+    TWILIO_AUTH_TOKEN: blankAsUnset(env.TWILIO_AUTH_TOKEN),
+    TWILIO_API_KEY_SID: blankAsUnset(env.TWILIO_API_KEY_SID),
+    TWILIO_API_KEY_SECRET: blankAsUnset(env.TWILIO_API_KEY_SECRET),
+    TWILIO_PHONE_NUMBER: blankAsUnset(env.TWILIO_PHONE_NUMBER),
+    DEEPGRAM_API_KEY: blankAsUnset(env.DEEPGRAM_API_KEY),
+    ANTHROPIC_API_KEY: blankAsUnset(env.ANTHROPIC_API_KEY),
+    PUBLIC_WEBHOOK_URL: blankAsUnset(env.PUBLIC_WEBHOOK_URL),
   });
   // Fail closed in production: an unset (→ dev default), publicly-known
   // placeholder, or too-short SESSION_SECRET would let an attacker forge session
@@ -138,5 +183,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     sessionSecret: parsed.SESSION_SECRET,
     listUnsubscribeSecret: parsed.LIST_UNSUBSCRIBE_SECRET,
     gmailPushToken: parsed.GMAIL_PUSH_TOKEN ?? null,
+    twilioAccountSid: parsed.TWILIO_ACCOUNT_SID ?? null,
+    twilioAuthToken: parsed.TWILIO_AUTH_TOKEN ?? null,
+    twilioApiKeySid: parsed.TWILIO_API_KEY_SID ?? null,
+    twilioApiKeySecret: parsed.TWILIO_API_KEY_SECRET ?? null,
+    twilioPhoneNumber: parsed.TWILIO_PHONE_NUMBER ?? null,
+    deepgramApiKey: parsed.DEEPGRAM_API_KEY ?? null,
+    anthropicApiKey: parsed.ANTHROPIC_API_KEY ?? null,
+    publicWebhookUrl: parsed.PUBLIC_WEBHOOK_URL ?? null,
   };
 }

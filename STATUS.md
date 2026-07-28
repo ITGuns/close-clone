@@ -1,5 +1,17 @@
 # STATUS — Switchboard build
 
+## DEMO → DEPLOYMENT (2026-07-29, D-061/D-062 · CONTRACTS v1.3.6)
+
+Three parallel audits — provider wiring, deploy readiness, Gmail/auth — turned up a single recurring defect: **code that is written, tested, and never actually connected in the artifact you deploy.** Five instances, all invisible to ~4,000 green tests, because every layer mocks the one beneath it and every historical "verified against the real API" check was pointed at `dev/boot.ts` rather than `main.ts`.
+
+**What was broken.** The deployed app was **read-only** — a global guard rejects mutating requests without a CSRF header the SPA never sent, so a rep could read but could not log a call, add a note, move a stage, or commit an import. **Real-mode SSO looped forever** — the SPA decided identity from `localStorage` alone and never called the `GET /auth/me` that had existed all along. **Smart Views and bulk did not exist in production** — mounted from the dev boot only. **`POST /sms/send` was mounted from nowhere at all.** And real-mode email send threw on every call because the Gmail config reached one registry but not its twin. Alongside those: `/wh/gmail` ran the MOCK push verifier in production (open to anyone on the internet), any rep could send mail as any colleague from their real address, CSV import could not create its own storage directory and had no volume, and nginx rejected any CSV over 1 MB.
+
+**The structural answer.** Two fixes target the class rather than the instances. The CSRF header is now one shared constant both sides import — the server checks presence only, so a drifted name fails silently as "every write 403s once deployed", and two copies was one rename from repeating it. And a manifest test over all 27 route modules asserts the PRODUCTION composition root mounts each one: set equality against the directory in both directions, everything mounted under a maximal env, gated families provably absent under a minimal one. Sabotage-proven — unwiring a module fails with a message naming it and the function to fix. CI now builds both Docker images (it never had) and gates on a real browser doing a real write against the composed stack.
+
+**Provider adapters are wired.** Twilio, Deepgram and Haiku now construct from config; partial credentials refuse the boot naming the missing keys rather than mounting routes that fail per-request. `PUBLIC_WEBHOOK_URL` is required for telephony because Twilio signs the full public URL — without it every inbound webhook fails signature verification silently, **including STOP opt-outs**. Both `.env.example` files now state plainly that none of these adapters has ever run against a live vendor account.
+
+**Suites: api 1,823 · web 1,397+**, run sequentially (concurrent runs starve this host into phantom failures). **Still unproven:** none of it has been exercised against a real container — the Docker daemon has been down all session, `nginx -t` never ran on the new upload cap, and the container-smoke job is expected RED on first run until a stack seed exists (a fresh compose has no users and no data). Unit-green is explicitly NOT evidence for this class of bug; that is the entire lesson of D-061.
+
 ## COMPLIANCE RAIL FIXES (2026-07-20, D-060 · CONTRACTS v1.3.4)
 
 The two real compliance gaps left open by the D-059 audit are closed. Both were rails that were enforceable on paper and bypassable in practice.

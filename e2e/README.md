@@ -81,3 +81,71 @@ exercises the real welcome → login flow itself.
 PRs: installs deps, `playwright install --with-deps chromium`, builds the web app
 (mock mode), runs the suite, and uploads the HTML report + traces as artifacts on
 failure. Traces are captured `on-first-retry`.
+
+---
+
+# `container-smoke.mjs` — the composed-stack gate
+
+Everything above this line drives the **mock** bundle. `container-smoke.mjs` is
+the opposite: it drives the **real composed stack** — nginx → Fastify → Postgres,
+from the images `deploy/docker-compose.yml` builds — in a real chromium. It is a
+plain Node script, **not** a Playwright spec (no `playwright.config.ts`, no
+`webServer`, no MSW), so `pnpm --dir e2e test` does not pick it up.
+
+It exists because of `DECISIONS.md` **D-061**: every layer of this repo's testing
+mocks the one beneath it, so ~4,000 green tests coexisted with a deployed app
+whose every write returned 403.
+
+## Running it locally
+
+```bash
+cp deploy/.env.example deploy/.env   # set POSTGRES_PASSWORD, SESSION_SECRET,
+                                     # LIST_UNSUBSCRIBE_SECRET (>=32 chars, different);
+                                     # MOCK_MODE=1 is correct here
+cd deploy && docker compose up -d --wait --build && cd ..
+node e2e/container-smoke.mjs         # or: SMOKE_BASE_URL=http://host:port node …
+```
+
+Checks (all gating; the script exits non-zero if any fails):
+
+1. the front door responds;
+2. `/healthz` answers **through the nginx proxy** — separates "the SPA is broken"
+   from "the api never came up";
+3. dev-login lands in `/inbox`;
+4. **a write survives a reload** (the point of the file — optimistic UI will show
+   a change the server rejected);
+5. a mutation **without** `x-switchboard-csrf` is refused with 403;
+6. no console errors.
+
+On any failure it writes a screenshot, the served DOM and the console log to
+`e2e/test-results/container-smoke/` (already gitignored / prettierignored) and
+prints two non-gating `NOTE` lines naming which login screen rendered and what
+`GET /api/v1/auth/dev-users` returned.
+
+## CI
+
+`.github/workflows/ci.yml` → job **`container-smoke`** (`needs: build-test`, so
+lint/typecheck/unit failures surface before this much slower job runs). It
+synthesizes `deploy/.env` (gitignored, so CI must create it), validates the
+compose file, **builds both images** (`apps/api/Dockerfile` and
+`apps/web/Dockerfile` — nothing else in CI builds them), brings the stack up with
+`docker compose up -d --wait`, runs this script as a hard gate, and on failure
+dumps `docker compose ps` plus api/web/postgres/redis logs and uploads the
+artifacts above.
+
+## Known blockers (as of this writing — the job is expected RED on first run)
+
+Both are **outside** `e2e/` and were reported rather than worked around:
+
+- **The composed web bundle cannot authenticate at all.** `apps/web/Dockerfile`
+  builds with `VITE_API_MODE=real`, so `auth/LoginPage.tsx` renders
+  `SsoLoginPage`, not the dev-login picker — and `auth/AuthProvider.tsx` derives
+  `isAuthenticated` **only** from `localStorage`; nothing in `apps/web/src` ever
+  calls `GET /api/v1/auth/me`. After an OIDC round-trip the API's session cookie
+  is set but the SPA still considers itself logged out, so `RequireAuth` bounces
+  back to `/login`. Check 3 cannot pass until a real-mode session bootstrap
+  exists.
+- **A freshly composed stack has an empty database.** The entrypoint runs
+  migrations only; there is no production seed path, and `GET
+/api/v1/auth/dev-users` reads the `users` table — so the dev-login picker is
+  empty and the inbox has no completable work (checks 3 and 4).

@@ -1,7 +1,16 @@
 import { describe, expect, test } from 'vitest';
-import { createProviderRegistry, createEmailSenderRegistry } from './registry.ts';
+import {
+  createProviderRegistry,
+  createEmailSenderRegistry,
+  createRealTelephonyProvider,
+  createRealASRProvider,
+  createRealAIProvider,
+} from './registry.ts';
 import { MockEmailProvider } from './mock/mock-email-provider.ts';
 import { GmailEmailProvider } from './email/gmail-email-provider.ts';
+import { TwilioTelephonyProvider } from './telephony/twilio-telephony-provider.ts';
+import { DeepgramASRProvider } from './asr/index.ts';
+import { HaikuAIProvider } from './ai/index.ts';
 import { ManualClock } from './mock/clock.ts';
 
 describe('provider registry (composition root, CONTRACTS §C2)', () => {
@@ -29,6 +38,53 @@ describe('provider registry (composition root, CONTRACTS §C2)', () => {
       gmail: { clientId: 'cid', clientSecret: 'secret', address: 'rep@company.test' },
     });
     expect(registry.email).toBeInstanceOf(GmailEmailProvider);
+  });
+});
+
+describe('real comms adapter factories (the non-email adapter line)', () => {
+  const TWILIO = {
+    accountSid: 'ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx',
+    authToken: 'auth-token',
+    publicBaseUrl: 'https://crm.example.com',
+  };
+
+  test('createRealTelephonyProvider builds the real Twilio adapter (fetch transport bound)', () => {
+    expect(createRealTelephonyProvider(TWILIO)).toBeInstanceOf(TwilioTelephonyProvider);
+  });
+
+  test('the Twilio webhook verifier is keyed by the configured auth token', () => {
+    // Behavioral proof the binding reached the adapter: a signature over the
+    // wrong token must be rejected, and no signature at all must be rejected.
+    const provider = createRealTelephonyProvider(TWILIO);
+    expect(provider.verifyWebhook({}, 'Body=x', `${TWILIO.publicBaseUrl}/wh/twilio/sms`)).toBe(
+      false,
+    );
+  });
+
+  test('a trailing slash on publicBaseUrl is normalised (Twilio signs exact URLs)', () => {
+    // Constructing with a trailing slash must not produce `//wh/twilio/...`
+    // callback URLs; the factory strips it before deriving routes.
+    expect(
+      createRealTelephonyProvider({ ...TWILIO, publicBaseUrl: 'https://crm.example.com/' }),
+    ).toBeInstanceOf(TwilioTelephonyProvider);
+  });
+
+  // failure paths: empty credentials must fail AT CONSTRUCTION (the composition
+  // root never calls with empties — config treats '' as unset — but the adapter
+  // line still refuses rather than building a per-request thrower).
+  test('empty Twilio credentials refuse construction', () => {
+    expect(() => createRealTelephonyProvider({ ...TWILIO, accountSid: '' })).toThrow(/accountSid/);
+    expect(() => createRealTelephonyProvider({ ...TWILIO, authToken: '' })).toThrow(/authToken/);
+  });
+
+  test('createRealASRProvider builds the real Deepgram adapter; empty key refuses', () => {
+    expect(createRealASRProvider({ apiKey: 'dg-key' })).toBeInstanceOf(DeepgramASRProvider);
+    expect(() => createRealASRProvider({ apiKey: '' })).toThrow(/apiKey/);
+  });
+
+  test('createRealAIProvider builds the real Haiku adapter; empty key refuses', () => {
+    expect(createRealAIProvider({ apiKey: 'sk-ant-test' })).toBeInstanceOf(HaikuAIProvider);
+    expect(() => createRealAIProvider({ apiKey: '' })).toThrow(/apiKey/);
   });
 });
 

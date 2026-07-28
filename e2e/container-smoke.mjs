@@ -1,4 +1,7 @@
 import { chromium } from '@playwright/test';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /*
  * CONTAINER SMOKE — the check that has never been run, and whose absence let a
@@ -17,16 +20,33 @@ import { chromium } from '@playwright/test';
  *   1. bring the stack up:  cd deploy && docker compose --env-file .env up -d
  *   2. node container-smoke.mjs         (from e2e/)
  *
- * Exits non-zero on failure so CI can gate on it.
+ * Exits non-zero on failure so CI can gate on it
+ * (.github/workflows/ci.yml → job `container-smoke`, which also builds both
+ * images and boots the stack).
  */
 
 const BASE = process.env.SMOKE_BASE_URL ?? 'http://localhost:8080';
+
+// Failure evidence, resolved from this file so it does not depend on cwd, and
+// uploaded as a CI artifact. A screenshot plus the served DOM answers "which
+// login screen rendered / what did the page actually say" without a re-run.
+// It lives under e2e/test-results/ deliberately: that path is already covered by
+// e2e/.gitignore and .prettierignore, so a local run leaves nothing for git or
+// `pnpm format:check` to trip over.
+const ARTIFACT_DIR = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  'test-results',
+  'container-smoke',
+);
 
 const results = [];
 const check = (name, ok, detail = '') => {
   results.push({ name, ok, detail });
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ` — ${detail}` : ''}`);
 };
+
+/** Non-gating context lines. These explain a failure; they never cause one. */
+const note = (label, value) => console.log(`NOTE  ${label} — ${value}`);
 
 const browser = await chromium.launch();
 const page = await browser.newPage();
@@ -40,9 +60,33 @@ try {
   const res = await page.goto(BASE, { waitUntil: 'networkidle', timeout: 30_000 });
   check('front door responds', (res?.status() ?? 0) < 400, `status ${res?.status()}`);
 
+  // --- 1b. nginx actually reaches the api ------------------------------------
+  // Distinguishes "the SPA is broken" from "the api never came up / the reverse
+  // proxy is misrouted" — the same 4xx/5xx would otherwise surface as a
+  // mysterious failure three checks later.
+  const health = await page.request.get(`${BASE}/healthz`);
+  check('api reachable through the proxy (/healthz)', health.ok(), `status ${health.status()}`);
+
   // --- 2. Sign in -----------------------------------------------------------
   await page.goto(`${BASE}/login`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1500);
+
+  // Which sign-in screen was served? apps/web/src/auth/LoginPage.tsx picks by
+  // VITE_API_MODE, which is baked at image build time — so a bundle built the
+  // wrong way shows up here as a named cause rather than as "no admin button".
+  const devUsers = await page.request.get(`${BASE}/api/v1/auth/dev-users`);
+  const devUserCount = devUsers.ok() ? ((await devUsers.json().catch(() => [])) ?? []).length : -1;
+  note(
+    'login screen',
+    (await page.locator('.sb-login__title').count()) > 0 ? 'rendered' : 'absent',
+  );
+  note(
+    'dev-login picker source',
+    devUsers.ok()
+      ? `GET /api/v1/auth/dev-users → 200, ${devUserCount} user(s)`
+      : `GET /api/v1/auth/dev-users → ${devUsers.status()} (not MOCK_MODE, or route absent)`,
+  );
+
   let signedIn = false;
   for (const b of await page.getByRole('button').all()) {
     if (/admin/i.test((await b.textContent()) ?? '')) {
@@ -114,6 +158,23 @@ try {
 } catch (err) {
   check('smoke run completed', false, String(err));
 } finally {
+  // Evidence first, then close. Best-effort: a dump failure must never mask the
+  // real result, and must never turn a passing run red.
+  if (results.some((r) => !r.ok)) {
+    try {
+      await mkdir(ARTIFACT_DIR, { recursive: true });
+      await page.screenshot({ path: resolve(ARTIFACT_DIR, 'page.png'), fullPage: true });
+      await writeFile(resolve(ARTIFACT_DIR, 'page.html'), await page.content(), 'utf8');
+      await writeFile(
+        resolve(ARTIFACT_DIR, 'console.log'),
+        `url: ${page.url()}\n\n${consoleErrors.join('\n')}\n`,
+        'utf8',
+      );
+      console.log(`\nartifacts written to ${ARTIFACT_DIR}`);
+    } catch (dumpErr) {
+      console.log(`\nartifact dump failed: ${String(dumpErr)}`);
+    }
+  }
   await browser.close();
 }
 

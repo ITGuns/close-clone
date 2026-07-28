@@ -2,7 +2,9 @@ import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vi
 import { cleanup, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
+import { http, HttpResponse } from 'msw';
 import { db } from '../mocks/fixtures.ts';
+import { server } from '../mocks/server.ts';
 import { renderRoutes } from '../test/renderRoutes.tsx';
 import { browserNav, SSO_LOGIN_PATH } from './browserNav.ts';
 
@@ -56,7 +58,19 @@ describe('LoginPage — mock mode (VITE_API_MODE unset)', () => {
 });
 
 describe('LoginPage — real mode (VITE_API_MODE=real)', () => {
-  beforeEach(() => vi.stubEnv('VITE_API_MODE', 'real'));
+  beforeEach(() => {
+    vi.stubEnv('VITE_API_MODE', 'real');
+    // Real mode boots by asking the server who is signed in; default to the
+    // ordinary logged-out answer. Session-holding tests override via server.use.
+    server.use(
+      http.get('/api/v1/auth/me', () =>
+        HttpResponse.json(
+          { error: { code: 'UNAUTHENTICATED', message: 'no active session' } },
+          { status: 401 },
+        ),
+      ),
+    );
+  });
 
   test('renders the SSO screen and no fixture identities or password field', async () => {
     renderRoutes('/login');
@@ -92,8 +106,11 @@ describe('LoginPage — real mode (VITE_API_MODE=real)', () => {
     expect(alert.textContent).not.toContain('<script>');
   });
 
-  test('an existing session skips the SSO screen', async () => {
-    renderRoutes('/login', { user: USER });
+  test('an existing SERVER session skips the SSO screen (no localStorage involved)', async () => {
+    // The session lives in an HttpOnly cookie only the server can read — the
+    // client learns about it purely from /auth/me. Nothing is pre-seeded locally.
+    server.use(http.get('/api/v1/auth/me', () => HttpResponse.json(USER)));
+    renderRoutes('/login');
     expect(await screen.findByRole('heading', { name: 'Inbox', level: 1 })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /single sign-on/i })).not.toBeInTheDocument();
   });
