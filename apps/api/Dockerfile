@@ -72,6 +72,21 @@ COPY --from=build /app/.build-ok /app/.build-ok
 COPY --from=prod --chown=node:node /app /app
 COPY --chown=node:node deploy/scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
+# Writable runtime-state dirs, created as root BEFORE the USER switch.
+#   /var/lib/switchboard/imports — raw CSV uploads. services/imports/storage.ts
+#     mkdirs IMPORT_STORAGE_DIR lazily on the first upload, but `/var/lib` is
+#     root:root 0755 in the base image and the runtime user is `node` (uid 1000),
+#     so that mkdir threw EACCES and the very first POST /api/v1/imports failed.
+#   /var/lib/switchboard/tmp — TMPDIR. Admin data exports are written under
+#     os.tmpdir() (routes/admin-export.ts) with no env override anywhere in the
+#     code, so redirecting TMPDIR is the only way to give them a durable home.
+# These are also the compose mount points: Docker seeds an EMPTY named volume
+# from the image path INCLUDING its ownership, so chowning here fixes both the
+# unmounted and the mounted case.
+RUN mkdir -p /var/lib/switchboard/imports /var/lib/switchboard/tmp \
+  && chown -R node:node /var/lib/switchboard
+ENV IMPORT_STORAGE_DIR=/var/lib/switchboard/imports
+ENV TMPDIR=/var/lib/switchboard/tmp
 USER node
 EXPOSE 3000
 # Liveness: /healthz (ARCHITECTURE §8). Node 22 has global fetch — no curl needed.

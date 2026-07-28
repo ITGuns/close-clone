@@ -7,7 +7,7 @@
  * The custom-field list is read from the admin surface (`GET /admin/custom-fields`)
  * so the Map step offers the same typed lead fields the server validates against.
  */
-import { apiRequest, API_BASE } from '../../../api/client.ts';
+import { apiRequest, API_BASE, csrfHeaders } from '../../../api/client.ts';
 import { ApiError, isApiErrorCode, statusToCode, type ApiErrorBody } from '../../../api/errors.ts';
 import { readFileText } from '../lib/file.ts';
 import type { CommitResponse, DryRunRequest, DryRunResponse, ImportResource } from '../types.ts';
@@ -51,14 +51,32 @@ async function toApiError(res: Response): Promise<ApiError> {
 
 /**
  * POST /imports — upload a CSV as multipart/form-data; returns the created row.
- * The body is hand-built (a single `file` part) rather than via `FormData` so the
- * request carries a plain string body: the real server's streaming multipart
- * parser reads it identically, and it sidesteps the jsdom/undici FormData-body
- * hang MSW exhibits under test. CSV is text, so reading the File as text is safe.
+ *
+ * The body is hand-built as a string (a single `file` part) rather than handed to
+ * `FormData`. That reads like a bug — it does bypass the browser's own multipart
+ * framing — but `FormData` is not usable here today:
+ *
+ *  - Under vitest's jsdom + undici + MSW stack a `FormData` body whose part is a
+ *    jsdom `Blob` NEVER completes when a handler reads it (the request hangs to
+ *    the test timeout), and a raw `Blob` body is silently stringified to
+ *    "[object Blob]". Both were re-measured; neither carries the CSV. Switching
+ *    would leave this path with no body coverage at all and would break the
+ *    existing round-trip in ../mocks/importHandlers.test.ts.
+ *  - The memory argument does not bite at this size: UploadStep rejects anything
+ *    over MAX_UPLOAD_BYTES (5 MB) BEFORE calling here, and it has already read the
+ *    same file to a string for the client-side preview parse. The server's
+ *    streaming parser reads this string body identically.
+ *
+ * Revisit if the upload cap grows or the MSW/undici body handling is fixed.
+ *
+ * The CSRF header must be set by hand: this is a raw `fetch`, so it does not
+ * inherit apiRequest's, and the API's session guard answers 403 FORBIDDEN to a
+ * mutating request without it (apps/api/src/auth/guards.ts).
  */
 export async function uploadImport(file: File): Promise<ImportResource> {
   const text = await readFileText(file);
   const boundary = `----switchboard-import-${crypto.randomUUID()}`;
+  // Quotes/CRLF would break out of the Content-Disposition line — strip, don't trust.
   const safeName = (file.name.length > 0 ? file.name : 'import.csv').replace(/["\r\n]/g, '');
   const body =
     `--${boundary}\r\n` +
@@ -73,6 +91,7 @@ export async function uploadImport(file: File): Promise<ImportResource> {
     headers: {
       Accept: 'application/json',
       'Content-Type': `multipart/form-data; boundary=${boundary}`,
+      ...csrfHeaders('POST'),
     },
   });
   if (!res.ok) throw await toApiError(res);

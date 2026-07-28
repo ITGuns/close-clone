@@ -18,13 +18,16 @@ import type { IncomingHttpHeaders } from 'node:http';
  * needs. GET/HEAD/OPTIONS are safe methods and are never gated.
  */
 
-export const CSRF_HEADER = 'x-switchboard-csrf';
+/*
+ * The header name and the safe-method set live in @switchboard/shared because the
+ * web client must send exactly this header — and since `hasCsrfHeader` below checks
+ * only presence, a disagreement about the name fails silently as "every write 403s
+ * once deployed" rather than as a type error. Re-exported so this module stays the
+ * one import site for CSRF concerns inside the api.
+ */
+import { CSRF_HEADER, isMutatingMethod } from '@switchboard/shared';
 
-const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
-
-export function isMutatingMethod(method: string): boolean {
-  return !SAFE_METHODS.has(method.toUpperCase());
-}
+export { CSRF_HEADER, isMutatingMethod };
 
 /**
  * True if the request carries a non-empty CSRF header. The value is not checked

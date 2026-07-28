@@ -7,9 +7,39 @@
  * No response schema validation is done here — the server owns the contract and
  * shapes come straight from @switchboard/shared types. Errors ARE parsed.
  */
+import { CSRF_HEADER, isMutatingMethod } from '@switchboard/shared';
 import { ApiError, isApiErrorCode, statusToCode, type ApiErrorBody } from './errors.ts';
 
 export const API_BASE = '/api/v1';
+
+/**
+ * Custom-header CSRF defence. The session guard answers 403 FORBIDDEN to any
+ * mutating request that arrives without it, so every write from this SPA (log a
+ * call, add a note, move a stage, commit an import) depends on it.
+ *
+ * The name and the safe-method set are imported from the contract package rather
+ * than mirrored here: the server checks only that the header is PRESENT, never its
+ * value, so a name that drifts between the two sides produces no type error and no
+ * failing unit test — just "every write 403s once deployed". That is precisely the
+ * bug this rail was added to fix, and one shared constant is what stops it
+ * recurring.
+ *
+ * The value is NOT a secret. Its presence is the proof, because a cross-site form
+ * or navigation cannot set a custom request header without a CORS preflight, and
+ * the API grants CORS to its own origin only.
+ */
+export { CSRF_HEADER, isMutatingMethod };
+
+/** Non-secret marker value; only its non-emptiness is load-bearing. */
+export const CSRF_HEADER_VALUE = '1';
+
+/**
+ * The CSRF header for `method` (empty for safe methods). Exported because the
+ * import upload builds its own `fetch` — it must not silently skip the rail.
+ */
+export function csrfHeaders(method: string): Record<string, string> {
+  return isMutatingMethod(method) ? { [CSRF_HEADER]: CSRF_HEADER_VALUE } : {};
+}
 
 export type QueryValue = string | number | boolean | undefined | null;
 export type QueryParams = Record<string, QueryValue>;
@@ -54,9 +84,15 @@ async function toApiError(res: Response): Promise<ApiError> {
 }
 
 export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Promise<T> {
-  const headers: Record<string, string> = { Accept: 'application/json', ...opts.headers };
+  const method = opts.method ?? 'GET';
+  // opts.headers is spread last so an explicit caller header always wins.
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    ...csrfHeaders(method),
+    ...opts.headers,
+  };
   const init: RequestInit = {
-    method: opts.method ?? 'GET',
+    method,
     headers,
     credentials: 'include',
   };

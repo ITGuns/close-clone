@@ -24,6 +24,20 @@
 
 name: switchboard
 
+# ---------------------------------------------------------------------------
+# Log rotation, applied to EVERY service via the `*default-logging` alias.
+# Docker's default json-file driver is UNBOUNDED: pino logs a line per request,
+# so on a small VM the container logs grow until the disk is full and Postgres
+# (sharing that disk) goes down with it. Cap: 10 MiB x 5 files = 50 MiB per
+# container, ~450 MiB worst case with every profile on. Raise max-file, not
+# max-size, if you need more history — rotation cost scales with file size.
+# ---------------------------------------------------------------------------
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
 services:
   # ---------------------------------------------------------------------------
   # Postgres 16 — source of truth. Data on `pgdata`; WAL archived to `pgwal`.
@@ -62,6 +76,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    logging: *default-logging
     deploy:
       resources:
         limits:
@@ -91,6 +106,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    logging: *default-logging
     deploy:
       resources:
         limits:
@@ -118,6 +134,24 @@ services:
       # In-cluster service URLs override any localhost values from .env.
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379
+      # Raw CSV uploads. The import lifecycle spans THREE separate HTTP requests:
+      # POST /imports writes the file, POST /imports/:id/dry-run re-reads it, and
+      # only commit is DB-only. Without a volume, any restart (or redeploy)
+      # between upload and dry-run orphans the import row on a vanished
+      # `file_ref` — and there is no re-upload route to recover from that.
+      # Re-running a dry-run after fixing a column mapping hits the same thing.
+      # Pinned here rather than left to the code default so the mount target and
+      # the writer can never drift apart.
+      IMPORT_STORAGE_DIR: /var/lib/switchboard/imports
+      # Admin data exports (POST /api/v1/admin/exports) are written under
+      # os.tmpdir(); the route accepts an `exportsRoot` dep but the composition
+      # root passes none, so TMPDIR is the only lever from outside the code.
+      # Exports land at /var/lib/switchboard/tmp/switchboard/exports.
+      # NOTE: there is still no download endpoint — see README "Admin exports".
+      TMPDIR: /var/lib/switchboard/tmp
+    volumes:
+      - importdata:/var/lib/switchboard/imports
+      - exportdata:/var/lib/switchboard/tmp
     depends_on:
       postgres:
         condition: service_healthy
@@ -136,6 +170,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
+    logging: *default-logging
     deploy:
       resources:
         limits:
@@ -163,6 +198,16 @@ services:
       MIGRATE_ON_BOOT: '0'
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379
+      # Same image, same state dirs, same volumes as `api`. The worker does not
+      # touch either today (import dry-run is an api HTTP route; commit is
+      # DB-only), but mounting them keeps the two roles interchangeable so a
+      # future in-worker import/export step cannot silently write to a
+      # container-local path that disappears on restart.
+      IMPORT_STORAGE_DIR: /var/lib/switchboard/imports
+      TMPDIR: /var/lib/switchboard/tmp
+    volumes:
+      - importdata:/var/lib/switchboard/imports
+      - exportdata:/var/lib/switchboard/tmp
     depends_on:
       postgres:
         condition: service_healthy
@@ -178,6 +223,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
+    logging: *default-logging
     deploy:
       resources:
         limits:
@@ -206,6 +252,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    logging: *default-logging
     deploy:
       resources:
         limits:
@@ -246,6 +293,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+    logging: *default-logging
     deploy:
       resources:
         limits:
@@ -274,6 +322,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    logging: *default-logging
     deploy:
       resources:
         limits:
@@ -321,14 +370,25 @@ services:
       timeout: 5s
       retries: 10
       start_period: 40s
+    logging: *default-logging
     deploy:
       resources:
         limits:
           cpus: '1.0'
           memory: 768M
 
-# Named volumes: DB data, a SEPARATE WAL-archive volume (PITR base), and Redis AOF.
+# Named volumes:
+#   pgdata     — Postgres data (source of truth).
+#   pgwal      — SEPARATE WAL archive (PITR base).
+#   redisdata  — Redis AOF.
+#   importdata — uploaded raw CSVs. Must outlive a restart: upload and dry-run
+#                are separate requests and there is no re-upload route.
+#   exportdata — TMPDIR for the api/worker; admin data exports live under it.
+#                NOT self-cleaning — nothing prunes finished export dirs today
+#                (see deploy/README.md "Admin exports").
 volumes:
   pgdata:
   pgwal:
   redisdata:
+  importdata:
+  exportdata:

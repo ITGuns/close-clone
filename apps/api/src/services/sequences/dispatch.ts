@@ -546,13 +546,17 @@ export async function processIntent(deps: DispatchDeps, intentId: string): Promi
   if (phaseA.kind === 'sms_ready') return finishSmsSend(deps, phaseA, intentId, nowIso);
 
   // --- Phase B: provider.send OUTSIDE the transaction (idempotencyKey=intentId).
-  const provider: EmailProvider = deps.providerFor({
-    address: phaseA.address,
-    provider: phaseA.provider,
-  });
-  const tokens = deps.cipher.decrypt(phaseA.oauthTokens);
+  // Provider construction and token decrypt live INSIDE the try: either can
+  // throw (missing gmail OAuth config, corrupt stored tokens), and an escape
+  // here would leave the intent CLAIMED until the sweeper's FAILED_TIMEOUT —
+  // a 5-minute hang instead of a clean provider_error terminal.
   let providerMessageId: string;
   try {
+    const provider: EmailProvider = deps.providerFor({
+      address: phaseA.address,
+      provider: phaseA.provider,
+    });
+    const tokens = deps.cipher.decrypt(phaseA.oauthTokens);
     const res = await provider.send(tokens, phaseA.draft, intentId);
     providerMessageId = res.providerMessageId;
   } catch (err) {

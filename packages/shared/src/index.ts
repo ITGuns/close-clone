@@ -10,5 +10,6 @@ export const VERSION = '0.0.0';
 
 export * from './domain.ts';
 export * from './events.ts';
+export * from './http.ts';
 export * from './providers.ts';
 export * from './dsl/index.ts';

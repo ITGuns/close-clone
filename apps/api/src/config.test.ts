@@ -118,6 +118,50 @@ test('loadConfig succeeds in production with strong distinct secrets', () => {
   expect(config.listUnsubscribeSecret).not.toBe(config.sessionSecret);
 });
 
+// ── GMAIL_PUSH_TOKEN: authenticates /wh/gmail (optional; presence in real mode
+// with Gmail configured is enforced by main.ts assertRealModeConfig) ─────────
+
+test('GMAIL_PUSH_TOKEN defaults to null; a blank env line is unset', () => {
+  expect(loadConfig({}).gmailPushToken).toBeNull();
+  expect(loadConfig({ GMAIL_PUSH_TOKEN: '' }).gmailPushToken).toBeNull();
+});
+
+test('GMAIL_PUSH_TOKEN passes through when set', () => {
+  expect(loadConfig({ GMAIL_PUSH_TOKEN: 'push-tok' }).gmailPushToken).toBe('push-tok');
+});
+
+test('production rejects a short GMAIL_PUSH_TOKEN', () => {
+  expect(() =>
+    loadConfig({
+      ...PROD_BASE,
+      LIST_UNSUBSCRIBE_SECRET: 'b'.repeat(48),
+      GMAIL_PUSH_TOKEN: 'short-token',
+    }),
+  ).toThrow(/GMAIL_PUSH_TOKEN/);
+});
+
+test('production rejects the committed GMAIL_PUSH_TOKEN placeholder (>=32 chars but public)', () => {
+  expect(() =>
+    loadConfig({
+      ...PROD_BASE,
+      LIST_UNSUBSCRIBE_SECRET: 'b'.repeat(48),
+      GMAIL_PUSH_TOKEN: 'change-me-to-a-random-gmail-push-token',
+    }),
+  ).toThrow(/GMAIL_PUSH_TOKEN/);
+});
+
+test('production accepts a strong GMAIL_PUSH_TOKEN; absent stays allowed (Gmail-less deploys)', () => {
+  const base = { ...PROD_BASE, LIST_UNSUBSCRIBE_SECRET: 'b'.repeat(48) };
+  expect(loadConfig({ ...base, GMAIL_PUSH_TOKEN: 'd'.repeat(48) }).gmailPushToken).toBe(
+    'd'.repeat(48),
+  );
+  expect(loadConfig({ ...base }).gmailPushToken).toBeNull();
+});
+
+test('non-production keeps a weak GMAIL_PUSH_TOKEN working (dev/test)', () => {
+  expect(loadConfig({ NODE_ENV: 'test', GMAIL_PUSH_TOKEN: 'tok' }).gmailPushToken).toBe('tok');
+});
+
 test('mock mode / non-production boots without LIST_UNSUBSCRIBE_SECRET (dev default, distinct from session dev default)', () => {
   const dev = loadConfig({});
   expect(dev.listUnsubscribeSecret).toBe('dev-insecure-unsubscribe-secret');

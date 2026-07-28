@@ -10,6 +10,7 @@ import { runBackfill } from './backfill.ts';
 import {
   InvalidPushError,
   MockGmailPushVerifier,
+  SharedTokenGmailPushVerifier,
   parseGmailPush,
   persistGmailPush,
   processGmailInboxRow,
@@ -64,19 +65,32 @@ describe('parseGmailPush', () => {
   });
 });
 
-describe('MockGmailPushVerifier', () => {
+describe('SharedTokenGmailPushVerifier', () => {
   test('accepts a structurally valid push, rejects garbage', () => {
     const fx = loadFixture('0001-history-advance.json');
-    const v = new MockGmailPushVerifier();
+    const v = new SharedTokenGmailPushVerifier();
     expect(v.verify(fx.headers, fx.rawBody)).toBe(true);
     expect(v.verify(fx.headers, 'garbage')).toBe(false);
   });
 
-  test('enforces a required shared token when configured', () => {
+  test('enforces a required shared token: correct accepted, wrong AND absent rejected', () => {
     const fx = loadFixture('0001-history-advance.json');
-    const v = new MockGmailPushVerifier({ requiredToken: 'mock-channel-token' });
+    const v = new SharedTokenGmailPushVerifier({ requiredToken: 'mock-channel-token' });
     expect(v.verify(fx.headers, fx.rawBody)).toBe(true);
     expect(v.verify({ ...fx.headers, 'x-goog-channel-token': 'wrong' }, fx.rawBody)).toBe(false);
+    // Absent header: an internet caller who only knows the envelope shape.
+    expect(v.verify({}, fx.rawBody)).toBe(false);
+  });
+
+  test('token match is case-insensitive on the header NAME, exact on the value', () => {
+    const fx = loadFixture('0001-history-advance.json');
+    const v = new SharedTokenGmailPushVerifier({ requiredToken: 'tok' });
+    expect(v.verify({ 'X-Goog-Channel-Token': 'tok' }, fx.rawBody)).toBe(true);
+    expect(v.verify({ 'X-Goog-Channel-Token': 'TOK' }, fx.rawBody)).toBe(false);
+  });
+
+  test('MockGmailPushVerifier remains the MOCK_MODE alias of the shared-token class', () => {
+    expect(new MockGmailPushVerifier()).toBeInstanceOf(SharedTokenGmailPushVerifier);
   });
 });
 

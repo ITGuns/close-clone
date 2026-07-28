@@ -39,6 +39,8 @@ const KNOWN_INSECURE_SECRETS: ReadonlySet<string> = new Set([
   'change-me-to-a-different-64-char-random-hex',
   'change-me-32-chars-minimum-111111',
   'change-me-random-hex',
+  // GMAIL_PUSH_TOKEN placeholder (.env.example must use exactly this string).
+  'change-me-to-a-random-gmail-push-token',
 ]);
 
 /** Minimum acceptable secret length (SESSION_SECRET, LIST_UNSUBSCRIBE_SECRET) in production. */
@@ -52,6 +54,9 @@ const envSchema = z.object({
   REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
   SESSION_SECRET: z.string().min(1).default(DEV_SESSION_SECRET),
   LIST_UNSUBSCRIBE_SECRET: z.string().min(1).default(DEV_UNSUBSCRIBE_SECRET),
+  /** Shared token authenticating /wh/gmail pushes. Optional here — real mode
+   *  enforces presence when Gmail is configured (main.ts assertRealModeConfig). */
+  GMAIL_PUSH_TOKEN: z.string().min(1).optional(),
 });
 
 export interface AppConfig {
@@ -62,6 +67,8 @@ export interface AppConfig {
   redisUrl: string;
   sessionSecret: string;
   listUnsubscribeSecret: string;
+  /** null ⇒ unset (or blank env line). Real mode + Gmail configured requires it. */
+  gmailPushToken: string | null;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -78,6 +85,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     // -style fallbacks let '' through and the HMAC key was literally ''.
     LIST_UNSUBSCRIBE_SECRET:
       env.LIST_UNSUBSCRIBE_SECRET === '' ? undefined : env.LIST_UNSUBSCRIBE_SECRET,
+    // Same blank-line convention: '' behaves like unset (→ null, and real mode
+    // with Gmail configured then refuses to boot — never a '' shared token).
+    GMAIL_PUSH_TOKEN: env.GMAIL_PUSH_TOKEN === '' ? undefined : env.GMAIL_PUSH_TOKEN,
   });
   // Fail closed in production: an unset (→ dev default), publicly-known
   // placeholder, or too-short SESSION_SECRET would let an attacker forge session
@@ -106,6 +116,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       'LIST_UNSUBSCRIBE_SECRET must be set to a strong unique value in production (>=32 chars); it signs one-click unsubscribe tokens, and an empty/placeholder value would let anyone forge them and mass-suppress leads.',
     );
   }
+  // GMAIL_PUSH_TOKEN gates /wh/gmail — an otherwise-unauthenticated internet
+  // ingress. Presence is enforced by main.ts (real mode + Gmail configured);
+  // WHEN set in production it must be strong, or the webhook is guessably open.
+  if (
+    parsed.NODE_ENV === 'production' &&
+    parsed.GMAIL_PUSH_TOKEN !== undefined &&
+    (KNOWN_INSECURE_SECRETS.has(parsed.GMAIL_PUSH_TOKEN) ||
+      parsed.GMAIL_PUSH_TOKEN.length < MIN_PROD_SECRET_LEN)
+  ) {
+    throw new Error(
+      'GMAIL_PUSH_TOKEN must be a strong unique value in production (>=32 chars); it authenticates /wh/gmail pushes, and a guessable/placeholder token leaves the webhook open to the internet.',
+    );
+  }
   return {
     nodeEnv: parsed.NODE_ENV,
     port: parsed.PORT,
@@ -114,5 +137,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     redisUrl: parsed.REDIS_URL,
     sessionSecret: parsed.SESSION_SECRET,
     listUnsubscribeSecret: parsed.LIST_UNSUBSCRIBE_SECRET,
+    gmailPushToken: parsed.GMAIL_PUSH_TOKEN ?? null,
   };
 }

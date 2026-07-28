@@ -74,6 +74,17 @@ function post(payload: Record<string, unknown>, headers: Record<string, string> 
   return app.inject({ method: 'POST', url: '/api/v1/emails/send', payload, headers });
 }
 
+/** Mount the route behind a preHandler that fakes an authenticated principal. */
+async function appAs(principalId: string): Promise<FastifyInstance> {
+  const authed = Fastify({ logger: false });
+  authed.addHook('preHandler', async (request) => {
+    request.actor = { id: principalId, type: 'user' };
+  });
+  registerEmailSendRoutes(authed, { db: ctx.db, providerFor, cipher });
+  await authed.ready();
+  return authed;
+}
+
 describe('happy path', () => {
   test('sends and returns the persisted ids', async () => {
     const res = await post({
@@ -206,17 +217,6 @@ describe('idempotent double-POST', () => {
  * these pin that the principal — never the payload — decides attribution.
  */
 describe('POST /api/v1/emails/send — actor attribution (F3)', () => {
-  /** Mount the route behind a preHandler that fakes an authenticated principal. */
-  async function appAs(principalId: string): Promise<FastifyInstance> {
-    const authed = Fastify({ logger: false });
-    authed.addHook('preHandler', async (request) => {
-      request.actor = { id: principalId, type: 'user' };
-    });
-    registerEmailSendRoutes(authed, { db: ctx.db, providerFor, cipher });
-    await authed.ready();
-    return authed;
-  }
-
   const body = (extra: Record<string, unknown> = {}): Record<string, unknown> => ({
     accountId,
     leadId: lead,
@@ -280,5 +280,77 @@ describe('POST /api/v1/emails/send — actor attribution (F3)', () => {
     const res = await post(body());
     expect(res.statusCode).toBe(400);
     expect(res.json<{ error: { code: string } }>().error.code).toBe('VALIDATION_FAILED');
+  });
+});
+
+/*
+ * F3 stopped a caller sending AS another user; `accountId` was the other half of
+ * the same hole — it still came from the body with no owner check, so an honestly
+ * attributed principal could send FROM a colleague's mailbox (their address, their
+ * Sent folder). The engine owns the check; these pin that it holds through the API
+ * (I-RAIL-API) and that the response does not confirm the mailbox exists.
+ */
+describe('POST /api/v1/emails/send — mailbox ownership', () => {
+  test("a principal cannot send from another user's mailbox", async () => {
+    const victim = await seedUser(ctx.db, { email: 'victim@example.com' });
+    const victimAccount = await seedAccount(ctx.db, victim, 'victim@mock.test');
+    const authed = await appAs(rep);
+    try {
+      const res = await authed.inject({
+        method: 'POST',
+        url: '/api/v1/emails/send',
+        payload: { accountId: victimAccount, leadId: lead, to: ['dana@acme.test'], body: 'Hi' },
+      });
+      expect(res.statusCode).toBe(404);
+      expect(res.json<{ error: { code: string } }>().error.code).toBe('NOT_FOUND');
+      expect(providerFor({ address: 'victim@mock.test', provider: 'mock' }).sendCallCount).toBe(0);
+      expect(
+        await ctx.db.select().from(emailMessages).where(eq(emailMessages.accountId, victimAccount)),
+      ).toHaveLength(0);
+      expect(await activitiesFor(ctx.db, lead)).toHaveLength(0);
+    } finally {
+      await authed.close();
+    }
+  });
+
+  test('the same 404 shape as a mailbox that does not exist — no existence oracle', async () => {
+    const victim = await seedUser(ctx.db, { email: 'victim2@example.com' });
+    const victimAccount = await seedAccount(ctx.db, victim, 'victim2@mock.test');
+    const NIL = '00000000-0000-4000-8000-0000000000ff';
+    const authed = await appAs(rep);
+    try {
+      const send = (id: string) =>
+        authed.inject({
+          method: 'POST',
+          url: '/api/v1/emails/send',
+          payload: { accountId: id, leadId: lead, to: ['dana@acme.test'], body: 'Hi' },
+        });
+      const foreign = await send(victimAccount);
+      const missing = await send(NIL);
+      expect(foreign.statusCode).toBe(missing.statusCode);
+      expect(foreign.json<{ error: { code: string; message: string } }>().error.message).toBe(
+        `email account ${victimAccount} not found`,
+      );
+      expect(missing.json<{ error: { code: string; message: string } }>().error.message).toBe(
+        `email account ${NIL} not found`,
+      );
+    } finally {
+      await authed.close();
+    }
+  });
+
+  test('the owner still sends from their own mailbox through the API', async () => {
+    const authed = await appAs(rep);
+    try {
+      const res = await authed.inject({
+        method: 'POST',
+        url: '/api/v1/emails/send',
+        payload: { accountId, leadId: lead, to: ['dana@acme.test'], body: 'Hi' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(providerFor({ address: 'rep@mock.test', provider: 'mock' }).sendCallCount).toBe(1);
+    } finally {
+      await authed.close();
+    }
   });
 });

@@ -36,7 +36,8 @@ import { findEmailDnc } from '../compliance/dnc.ts';
  *      (CONTRACTS §C6 I-DNC / §C8 SUPPRESSED — never an override prompt);
  *   3. per-account send-from — the sending rep's OWN mailbox address is the From /
  *      Message-ID identity, using that account's decrypted tokens + provider
- *      instance (resolving the 2b note);
+ *      instance (resolving the 2b note). "Own" is enforced, not assumed: the
+ *      mailbox must belong to the actor (see `loadAccount`);
  *   4. persistence into `email_messages`/`email_threads` consistent with 2c
  *      threading (a reply threads onto its parent's thread), writing exactly one
  *      `email_sent` activity via the ActivityWriter (`materializeThreadActivities`).
@@ -158,7 +159,7 @@ export interface SendServiceDeps {
 export interface SendOneOffInput {
   /** The rep performing the send (user merge context + template visibility). */
   actorId: string;
-  /** The sending mailbox (per-account send-from). */
+  /** The sending mailbox (per-account send-from). MUST belong to `actorId`. */
   accountId: string;
   /** Timeline target + lead merge context. */
   leadId: string;
@@ -197,10 +198,41 @@ interface AccountCtx {
   oauthTokens: string;
 }
 
-async function loadAccount(db: Db, accountId: string): Promise<AccountCtx> {
+/**
+ * Load the sending mailbox, enforcing that it belongs to the acting user.
+ *
+ * `accountId` comes from the request body while `actorId` is pinned to the
+ * authenticated principal (route F3), so without this check any rep — or any
+ * `write:leads` API token — could send FROM a colleague's mailbox: their real
+ * address on the From line, the copy in their Sent folder, and an `email_sent`
+ * activity on the timeline attributed to them. Mail leaving under someone else's
+ * identity is not recoverable after the fact, so ownership is a hard gate here in
+ * the engine (ARCHITECTURE §1) rather than a route-level filter the next caller
+ * can forget.
+ *
+ * NO ADMIN EXCEPTION, deliberately. `admin` is an operational role (settings,
+ * exports, RBAC), and its legitimate oversight needs are READ paths. "Admin may
+ * send as you, from your own Gmail, signed with their merge context" destroys
+ * non-repudiation for every rep on the team — the recipient, the Sent folder and
+ * the timeline would all show the mailbox owner, with nothing on the wire marking
+ * it as someone else's act. If a real delegation case appears (shared mailbox, an
+ * assistant sending for an AE) it needs an explicit grant modelled in
+ * CONTRACTS.md, not an implicit role bypass.
+ *
+ * Sequence sends are unaffected: `services/sequences/dispatch.ts` never calls
+ * this engine — it resolves the enrollment's own `emailAccountId` and persists on
+ * its own path — so nothing legitimate today sends from a mailbox it does not own.
+ *
+ * The refusal reuses SendAccountNotFoundError (C8 NOT_FOUND) and is checked
+ * BEFORE the not-linked branch: a distinct FORBIDDEN, or a 409 "exists but
+ * unlinked", would confirm that someone else's account id is real. A caller with
+ * no claim to the mailbox learns exactly nothing about it.
+ */
+async function loadAccount(db: Db, accountId: string, actorId: string): Promise<AccountCtx> {
   const rows = await db
     .select({
       id: emailAccounts.id,
+      userId: emailAccounts.userId,
       address: emailAccounts.address,
       provider: emailAccounts.provider,
       oauthTokens: emailAccounts.oauthTokens,
@@ -210,6 +242,7 @@ async function loadAccount(db: Db, accountId: string): Promise<AccountCtx> {
     .limit(1);
   const row = rows[0];
   if (row === undefined) throw new SendAccountNotFoundError(accountId);
+  if (row.userId !== actorId) throw new SendAccountNotFoundError(accountId);
   if (row.oauthTokens === null) throw new SendAccountNotLinkedError(accountId);
   return { id: row.id, address: row.address, provider: row.provider, oauthTokens: row.oauthTokens };
 }
@@ -527,7 +560,7 @@ export async function sendOneOff(
   const { db } = deps;
 
   await assertActiveUser(db, input.actorId);
-  const account = await loadAccount(db, input.accountId);
+  const account = await loadAccount(db, input.accountId, input.actorId);
   const lead = await loadLead(db, input.leadId);
   const user = await loadUser(db, input.actorId);
   const contact =

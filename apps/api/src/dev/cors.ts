@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { CSRF_HEADER } from '../auth/csrf.ts';
 
 /**
  * Minimal CORS + preflight for the dev server (no dependency on @fastify/cors).
@@ -12,8 +13,14 @@ import type { FastifyInstance } from 'fastify';
 
 const DEFAULT_ALLOWED = ['http://localhost:5173', 'http://127.0.0.1:5173'] as const;
 
-const ALLOW_METHODS = 'GET,POST,PATCH,DELETE,OPTIONS';
-const ALLOW_HEADERS = 'content-type,authorization,idempotency-key,accept';
+
+const ALLOW_METHODS = 'GET,POST,PUT,PATCH,DELETE,OPTIONS';
+// `x-switchboard-csrf` is non-negotiable here: the session guard rejects every
+// mutating request without it (auth/csrf.ts), and the web client now sends it on
+// all of them — so omitting it from the preflight allow-list fails EVERY write
+// cross-origin, which is the only topology this dev-only handler exists to serve.
+// PUT likewise: it was missing while the guard treats it as mutating.
+const ALLOW_HEADERS = `content-type,authorization,idempotency-key,accept,${CSRF_HEADER}`;
 
 export interface DevCorsOptions {
   /** Extra origins to allow beyond the Vite dev defaults. */

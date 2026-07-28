@@ -451,6 +451,94 @@ describe('template-based send', () => {
   });
 });
 
+/*
+ * Mailbox ownership. `accountId` arrives from the request body, so without an
+ * owner check any authenticated rep (or any `write:leads` API token) could send
+ * FROM a colleague's real mailbox: their address on the From line, their Sent
+ * folder, and an `email_sent` activity attributed to them. These pin that the
+ * sending mailbox must belong to the acting user.
+ */
+describe('mailbox ownership', () => {
+  test('a rep cannot send from a colleague mailbox — refused, provider never called', async () => {
+    const lead = await seedLead(ctx.db, 'Acme');
+    await seedContact(ctx.db, lead, ['dana@acme.test'], { name: 'Dana' });
+    const victim = await seedUser(ctx.db, { email: 'victim@example.com' });
+    const victimAccount = await seedAccount(ctx.db, victim, 'victim@mock.test');
+
+    await expect(
+      sendOneOff(deps, {
+        actorId: rep,
+        accountId: victimAccount,
+        leadId: lead,
+        to: ['dana@acme.test'],
+        body: 'Hi',
+      }),
+    ).rejects.toBeInstanceOf(SendAccountNotFoundError);
+
+    expect(providerFor({ address: 'victim@mock.test', provider: 'mock' }).sendCallCount).toBe(0);
+    expect(
+      await ctx.db.select().from(emailMessages).where(eq(emailMessages.accountId, victimAccount)),
+    ).toHaveLength(0);
+    expect(await activitiesFor(ctx.db, lead)).toHaveLength(0);
+  });
+
+  test('an ADMIN cannot send from another user mailbox either', async () => {
+    const lead = await seedLead(ctx.db, 'Acme');
+    const admin = await seedUser(ctx.db, { email: 'admin@example.com', role: 'admin' });
+    const victimAccount = await seedAccount(ctx.db, rep, 'rep@mock.test');
+
+    await expect(
+      sendOneOff(deps, {
+        actorId: admin,
+        accountId: victimAccount,
+        leadId: lead,
+        to: ['dana@acme.test'],
+        body: 'Hi',
+      }),
+    ).rejects.toBeInstanceOf(SendAccountNotFoundError);
+    expect(providerFor({ address: 'rep@mock.test', provider: 'mock' }).sendCallCount).toBe(0);
+  });
+
+  // The refusal must be indistinguishable from a nonexistent id: an
+  // "exists but unlinked" CONFLICT on someone else's mailbox would still confirm
+  // that the account id is real.
+  test("a colleague's UNLINKED mailbox is not-found, not a not-linked conflict", async () => {
+    const lead = await seedLead(ctx.db, 'Acme');
+    const victim = await seedUser(ctx.db, { email: 'victim2@example.com' });
+    const victimAccount = await seedAccount(ctx.db, victim, 'victim2@mock.test', false);
+
+    await expect(
+      sendOneOff(deps, {
+        actorId: rep,
+        accountId: victimAccount,
+        leadId: lead,
+        to: ['dana@acme.test'],
+        body: 'Hi',
+      }),
+    ).rejects.toBeInstanceOf(SendAccountNotFoundError);
+  });
+
+  // The fix is a check, not a wall: the owner's own send is untouched.
+  test('the owner sending from their own mailbox still works', async () => {
+    const lead = await seedLead(ctx.db, 'Acme');
+    await seedContact(ctx.db, lead, ['dana@acme.test'], { name: 'Dana' });
+    const victim = await seedUser(ctx.db, { email: 'victim3@example.com' });
+    await seedAccount(ctx.db, victim, 'victim3@mock.test');
+    const own = await seedAccount(ctx.db, rep, 'rep@mock.test');
+
+    const res = await sendOneOff(deps, {
+      actorId: rep,
+      accountId: own,
+      leadId: lead,
+      to: ['dana@acme.test'],
+      body: 'Hi',
+    });
+    expect(res.deduped).toBe(false);
+    expect(providerFor({ address: 'rep@mock.test', provider: 'mock' }).sendCallCount).toBe(1);
+    expect(providerFor({ address: 'victim3@mock.test', provider: 'mock' }).sendCallCount).toBe(0);
+  });
+});
+
 describe('validation / not-found', () => {
   test('no recipient is VALIDATION_FAILED', async () => {
     const lead = await seedLead(ctx.db, 'Acme');

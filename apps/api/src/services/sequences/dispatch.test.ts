@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { contacts, leads, orgSettings, suppressions } from '../../db/index.ts';
+import { contacts, emailAccounts, leads, orgSettings, suppressions } from '../../db/index.ts';
 import { createTestDb, type TestDb } from '../../db/test-helpers.ts';
 import { enrollContacts } from './enrollment.ts';
-import { processIntent } from './dispatch.ts';
+import { processIntent, type DispatchDeps } from './dispatch.ts';
 import { registerSequenceWorker } from './worker.ts';
 import {
   countActivities,
@@ -227,6 +227,40 @@ describe('I-SEND-4 (window + per-mailbox daily cap)', () => {
     expect(result.kind).toBe('deferred');
     expect(result.reason).toBe('cap_exceeded');
     expect(h.providers.get('rep@mock.test')!.deliveredCount).toBe(1);
+  });
+});
+
+describe('provider failure paths — clean terminal, never a hung CLAIMED', () => {
+  // Regression: providerFor() ran OUTSIDE the phase-B try, so a construction
+  // throw (e.g. real mode missing gmail OAuth config) escaped processIntent and
+  // the intent sat CLAIMED until the sweeper's 5-minute FAILED_TIMEOUT.
+  test('a providerFor construction throw lands FAILED/provider_error, not CLAIMED', async () => {
+    const { intentId } = await enrollOneEmailStep(0);
+    const deps: DispatchDeps = {
+      ...h.deps,
+      providerFor: () => {
+        throw new Error('real email provider requires gmail OAuth config');
+      },
+    };
+    const result = await processIntent(deps, intentId);
+    expect(result.kind).toBe('failed');
+    expect(result.reason).toBe('provider_error');
+    const state = await intentState(ctx.db, intentId);
+    expect(state.state).toBe('FAILED');
+    expect(state.skipReason).toContain('gmail OAuth config');
+  });
+
+  test('a token-decrypt failure also lands FAILED, not CLAIMED', async () => {
+    const { intentId } = await enrollOneEmailStep(0);
+    await ctx.db
+      .update(emailAccounts)
+      .set({ oauthTokens: 'not-a-ciphertext' })
+      .where(eq(emailAccounts.id, account));
+    const result = await processIntent(h.deps, intentId);
+    expect(result.kind).toBe('failed');
+    expect(result.reason).toBe('provider_error');
+    expect((await intentState(ctx.db, intentId)).state).toBe('FAILED');
+    expect(h.providers.get('rep@mock.test')?.deliveredCount ?? 0).toBe(0);
   });
 });
 

@@ -98,11 +98,16 @@ export interface GmailPushVerifier {
 }
 
 /**
- * Structural verifier for MOCK_MODE / tests. Rejects bodies that are not a valid
- * push envelope; optionally requires a shared token header to match (the mock
- * stand-in for signature verification). Never accepts malformed input.
+ * Shared-token verifier: rejects bodies that are not a valid push envelope and,
+ * when `requiredToken` is set, requires the token header to match. This IS the
+ * production verifier until the Pub/Sub OIDC-JWT adapter lands (needs a Google
+ * project — implement `GmailPushVerifier` and swap it in `main.ts`
+ * `buildGmailPushVerifier`): production MUST construct it with `requiredToken`,
+ * because without one it accepts any parseable envelope. `main.ts` enforces
+ * that (boot fails in real mode without `GMAIL_PUSH_TOKEN`). Never accepts
+ * malformed input.
  */
-export class MockGmailPushVerifier implements GmailPushVerifier {
+export class SharedTokenGmailPushVerifier implements GmailPushVerifier {
   private readonly requiredToken: string | undefined;
   private readonly tokenHeader: string;
 
@@ -123,6 +128,14 @@ export class MockGmailPushVerifier implements GmailPushVerifier {
     return lower[this.tokenHeader] === this.requiredToken;
   }
 }
+
+/**
+ * MOCK_MODE / test alias for {@link SharedTokenGmailPushVerifier} (tokenless =
+ * structural-only). Kept so mock wiring reads honestly as mock; production code
+ * must never construct anything named `Mock*` — `main.ts` uses the shared-token
+ * class directly, with a required token.
+ */
+export class MockGmailPushVerifier extends SharedTokenGmailPushVerifier {}
 
 // --- Persist (fast path) -----------------------------------------------------
 

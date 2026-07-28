@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { http, HttpResponse } from 'msw';
 import { server } from '../mocks/server.ts';
+import { apiRequest, CSRF_HEADER } from './client.ts';
 import { ApiError } from './errors.ts';
 import { getLead, getLeadTimeline, listLeads } from './leads.ts';
 import { previewSmartView } from './smartViews.ts';
@@ -90,6 +91,70 @@ describe('smart-view preview', () => {
       expect(err.code).toBe('VALIDATION_FAILED');
       expect(err.details).toBeTruthy();
     }
+  });
+});
+
+/*
+ * The API's session guard (apps/api/src/auth/guards.ts → auth/csrf.ts) rejects any
+ * mutating request that does not carry the custom CSRF header with 403 FORBIDDEN.
+ * The client never sent it, so every write from the deployed SPA failed. These
+ * tests pin the header onto mutating methods and keep safe methods free of it
+ * (GET/HEAD/OPTIONS are never gated, and sending it would only widen the CORS
+ * preflight surface for reads).
+ */
+describe('CSRF custom header', () => {
+  const captured: { method: string; csrf: string | null }[] = [];
+
+  function probeHandlers() {
+    const record = ({ request }: { request: Request }) => {
+      captured.push({ method: request.method, csrf: request.headers.get(CSRF_HEADER) });
+      return HttpResponse.json({ ok: true });
+    };
+    return [
+      http.get('*/api/v1/csrf-probe', record),
+      http.post('*/api/v1/csrf-probe', record),
+      http.patch('*/api/v1/csrf-probe', record),
+      http.put('*/api/v1/csrf-probe', record),
+      http.delete('*/api/v1/csrf-probe', record),
+    ];
+  }
+
+  test.each(['POST', 'PATCH', 'PUT', 'DELETE'])(
+    '%s carries a non-empty CSRF header',
+    async (method) => {
+      captured.length = 0;
+      server.use(...probeHandlers());
+      await apiRequest<{ ok: boolean }>('/csrf-probe', { method });
+      expect(captured).toHaveLength(1);
+      expect(captured[0]?.csrf ?? '').not.toBe('');
+      expect(captured[0]?.csrf).toBeTruthy();
+    },
+  );
+
+  test('a mutating request with a JSON body still carries the header', async () => {
+    captured.length = 0;
+    server.use(...probeHandlers());
+    await apiRequest<{ ok: boolean }>('/csrf-probe', { method: 'POST', body: { a: 1 } });
+    expect(captured[0]?.csrf).toBeTruthy();
+  });
+
+  test('GET does not send the header (safe methods are never gated)', async () => {
+    captured.length = 0;
+    server.use(...probeHandlers());
+    await apiRequest<{ ok: boolean }>('/csrf-probe');
+    expect(captured).toHaveLength(1);
+    expect(captured[0]?.method).toBe('GET');
+    expect(captured[0]?.csrf).toBeNull();
+  });
+
+  test('an explicit per-request header override wins', async () => {
+    captured.length = 0;
+    server.use(...probeHandlers());
+    await apiRequest<{ ok: boolean }>('/csrf-probe', {
+      method: 'POST',
+      headers: { [CSRF_HEADER]: 'caller-supplied' },
+    });
+    expect(captured[0]?.csrf).toBe('caller-supplied');
   });
 });
 

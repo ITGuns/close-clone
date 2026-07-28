@@ -11,11 +11,19 @@ import { Queue } from 'bullmq';
 import { loadConfig, type AppConfig } from './config.ts';
 import type { Db } from './db/index.ts';
 import { registerRoutes } from './routes/index.ts';
-import { createProviderRegistry, createEmailSenderRegistry } from './providers/registry.ts';
+import {
+  createProviderRegistry,
+  createEmailSenderRegistry,
+  type ProviderRegistry,
+  type EmailSenderRegistry,
+} from './providers/registry.ts';
 import { createBullmqQueueDriver } from './queue/index.ts';
 import type { QueueDriver } from './queue/index.ts';
 import { TokenCipher } from './services/sync/token-cipher.ts';
-import { MockGmailPushVerifier } from './services/sync/index.ts';
+import {
+  SharedTokenGmailPushVerifier,
+  type GmailPushVerifier,
+} from './services/sync/webhook.ts';
 import { ImportStorage } from './services/imports/storage.ts';
 import { sweepDueIntents } from './services/sequences/sweeper.ts';
 import { processIntent } from './services/sequences/dispatch.ts';
@@ -151,6 +159,71 @@ export function assertRealModeConfig(config: AppConfig, env: NodeJS.ProcessEnv):
         'Set them (HUMAN_TODO.md → "Company IdP OIDC app") or run MOCK_MODE=1.',
     );
   }
+  // /wh/gmail mounts iff Gmail is configured. When it WILL mount, the push
+  // ingress must have its shared token (CONTRACTS §C7 "signature-verified") —
+  // without one, any internet caller could inject webhook_inbox rows and force
+  // resyncs. Fail the boot rather than ever serving that route open.
+  if ((env['GOOGLE_CLIENT_ID'] ?? '') !== '' && config.gmailPushToken === null) {
+    throw new Error(
+      'MOCK_MODE=0 with GOOGLE_CLIENT_ID set requires GMAIL_PUSH_TOKEN: it authenticates ' +
+        '/wh/gmail pushes (configure the Pub/Sub push subscription with the same token). ' +
+        'Set it, or unset GOOGLE_CLIENT_ID to run without Gmail sync.',
+    );
+  }
+}
+
+/**
+ * Provider registries for the composition root. Gmail gates ONLY email /
+ * sequence-email — a missing Google account pauses that feature, never the boot
+ * (guide §1/§4.6): the eager registry is built only when Gmail is configured, so
+ * SSO, leads, pipeline etc. run without it.
+ *
+ * BOTH registries receive the same `gmail` binding. The sender registry is lazy
+ * about WHEN it fails (per send, not at construction) but it still needs the
+ * OAuth config to build a real provider — constructing it without `gmail` made
+ * every real-mode send throw `real email provider requires gmail OAuth config`.
+ */
+export interface BuiltRegistries {
+  registry: ProviderRegistry | null;
+  senderRegistry: EmailSenderRegistry;
+}
+
+export function buildRegistries(config: AppConfig, env: NodeJS.ProcessEnv): BuiltRegistries {
+  const gmailConfigured = config.mockMode || (env['GOOGLE_CLIENT_ID'] ?? '') !== '';
+  const gmail =
+    !config.mockMode && gmailConfigured
+      ? {
+          clientId: env['GOOGLE_CLIENT_ID']!,
+          clientSecret: env['GOOGLE_CLIENT_SECRET'] ?? '',
+          address: env['GMAIL_SENDER_ADDRESS'] ?? '',
+        }
+      : undefined;
+  const registryConfig = { mockMode: config.mockMode, ...(gmail !== undefined ? { gmail } : {}) };
+  return {
+    registry: gmailConfigured ? createProviderRegistry(registryConfig) : null,
+    senderRegistry: createEmailSenderRegistry(registryConfig),
+  };
+}
+
+/**
+ * `/wh/gmail` ingress verifier (CONTRACTS §C7: signature-verified). MOCK_MODE
+ * keeps the structural-only check. Real mode REQUIRES the shared push token —
+ * `assertRealModeConfig` already refused to boot without it, and this re-check
+ * makes an open verifier unconstructible even if a future caller skips that
+ * gate. The full Google Pub/Sub OIDC-JWT verifier is a later drop-in behind the
+ * same `GmailPushVerifier` seam (needs a Google project — HUMAN_TODO); until
+ * then this shared secret is what stands between the internet and
+ * `webhook_inbox` writes.
+ */
+export function buildGmailPushVerifier(config: AppConfig): GmailPushVerifier {
+  if (config.mockMode) return new SharedTokenGmailPushVerifier();
+  if (config.gmailPushToken === null) {
+    throw new Error(
+      'MOCK_MODE=0 requires GMAIL_PUSH_TOKEN to authenticate /wh/gmail pushes; ' +
+        'refusing to construct an open webhook verifier.',
+    );
+  }
+  return new SharedTokenGmailPushVerifier({ requiredToken: config.gmailPushToken });
 }
 
 export interface BuildOptions {
@@ -180,24 +253,9 @@ export async function buildProductionApp(options: BuildOptions = {}): Promise<Bu
   const probeQueue = new Queue('sequences', { connection });
 
   // ── Providers ─────────────────────────────────────────────────────────────
-  // Gmail gates ONLY email/sequences-email — a missing account pauses that
-  // feature, never the boot (guide §1/§4.6). The eager registry throws in real
-  // mode without Gmail config, so build it only when configured; SSO, leads,
-  // pipeline etc. run without a Google account. The sender registry is lazy
-  // (throws per-send, not at construction), so it is always safe to build.
-  const gmailConfigured = config.mockMode || (env['GOOGLE_CLIENT_ID'] ?? '') !== '';
-  const gmail =
-    !config.mockMode && gmailConfigured
-      ? {
-          clientId: env['GOOGLE_CLIENT_ID']!,
-          clientSecret: env['GOOGLE_CLIENT_SECRET'] ?? '',
-          address: env['GMAIL_SENDER_ADDRESS'] ?? '',
-        }
-      : undefined;
-  const registry = gmailConfigured
-    ? createProviderRegistry({ mockMode: config.mockMode, ...(gmail ? { gmail } : {}) })
-    : null;
-  const senderRegistry = createEmailSenderRegistry({ mockMode: config.mockMode });
+  // Both registries share the gmail binding — see buildRegistries for why the
+  // sender registry must NOT be built without it.
+  const { registry, senderRegistry } = buildRegistries(config, env);
   const cipher = new TokenCipher(config.sessionSecret);
 
   // buildLoggerOptions (not `logger: true`): it carries the req/res/err
@@ -330,7 +388,7 @@ export async function buildProductionApp(options: BuildOptions = {}): Promise<Bu
             db,
             provider: registry.email,
             cipher,
-            verifier: new MockGmailPushVerifier(),
+            verifier: buildGmailPushVerifier(config),
             redirectUri: `${env['PUBLIC_WEBHOOK_URL'] ?? ''}/api/v1/oauth/gmail/callback`,
             providerName: config.mockMode ? 'mock' : 'gmail',
           },
