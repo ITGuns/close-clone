@@ -11,7 +11,7 @@ import {
   OidcStateMismatchError,
   OidcTokenResponseError,
 } from './oidc/index.ts';
-import { groupsToRole } from './rbac.ts';
+import { resolveRole, type DomainRbacConfig } from './rbac.ts';
 import { provisionUser } from './provisioning.ts';
 import type { SessionCodec } from './session/session.ts';
 import type { OidcTxnCodec } from './session/txn.ts';
@@ -43,6 +43,11 @@ export interface OidcAuthRouteDeps {
   postLoginRedirect?: string;
   /** Where the browser lands after a failed/denied login (default `/login`). */
   loginErrorRedirect?: string;
+  /**
+   * Verified-Workspace-domain role resolution (rbac.ts) for IdPs that emit no
+   * `groups` claim (Google). Absent ⇒ groups-only, the pre-existing behaviour.
+   */
+  domainRbac?: DomainRbacConfig;
 }
 
 const callbackQuerySchema = z
@@ -121,15 +126,20 @@ export function registerOidcAuthRoutes(app: FastifyInstance, deps: OidcAuthRoute
       return failRedirect(reply, 'exchange_failed');
     }
 
-    const role = groupsToRole(claims.groups);
-    if (role === null) {
+    // Role resolution (rbac.ts): groups claim first (authoritative when
+    // present), else the verified-domain strategy when configured. Every
+    // refusal is audited with its precise machine reason; the browser only
+    // ever sees the coarse `no_access`.
+    const resolution = resolveRole(claims, deps.domainRbac);
+    if (!resolution.ok) {
       await auditDenied(deps.db, {
-        reason: 'no_group',
+        reason: resolution.reason,
         ip,
-        snapshot: { idpSubject: claims.sub, email: claims.email ?? null },
+        snapshot: { idpSubject: claims.sub, email: claims.email ?? null, hd: claims.hd ?? null },
       });
       return failRedirect(reply, 'no_access');
     }
+    const role = resolution.role;
 
     const email = claims.email;
     if (email === undefined) {

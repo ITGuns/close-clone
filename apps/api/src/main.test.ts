@@ -85,6 +85,82 @@ describe('assertRealModeConfig — fail closed without an IdP', () => {
   });
 });
 
+// ── Role resolution must be able to admit someone (the Google-issuer trap:
+// Google's ID tokens carry no `groups` claim, so groups-only RBAC against
+// accounts.google.com refuses EVERY login at runtime) ─────────────────────────
+
+const GOOGLE_IDP = {
+  ...REAL,
+  OIDC_ISSUER: 'https://accounts.google.com',
+  OIDC_CLIENT_ID: 'switchboard.apps.googleusercontent.com',
+  OIDC_CLIENT_SECRET: 'shh',
+} as const;
+
+describe('assertRealModeConfig — a boot whose SSO can never admit anyone is refused', () => {
+  test('Google issuer without AUTH_ALLOWED_DOMAIN refuses to boot', () => {
+    const env = { ...GOOGLE_IDP } as NodeJS.ProcessEnv;
+    expect(() => assertRealModeConfig(loadConfig(env), env)).toThrow(/AUTH_ALLOWED_DOMAIN/);
+  });
+
+  test('issuer normalisation: trailing slash / case still refuse', () => {
+    const slash = { ...GOOGLE_IDP, OIDC_ISSUER: 'https://accounts.google.com/' };
+    expect(() => assertRealModeConfig(loadConfig(slash), slash)).toThrow(/AUTH_ALLOWED_DOMAIN/);
+    const cased = { ...GOOGLE_IDP, OIDC_ISSUER: 'https://Accounts.Google.com' };
+    expect(() => assertRealModeConfig(loadConfig(cased), cased)).toThrow(/AUTH_ALLOWED_DOMAIN/);
+  });
+
+  test('Google issuer + AUTH_ALLOWED_DOMAIN boots (with or without admins)', () => {
+    const env = { ...GOOGLE_IDP, AUTH_ALLOWED_DOMAIN: 'corp.com' } as NodeJS.ProcessEnv;
+    expect(() => assertRealModeConfig(loadConfig(env), env)).not.toThrow();
+    const withAdmins = {
+      ...env,
+      AUTH_ADMIN_EMAILS: 'boss@corp.com, second@corp.com',
+    } as NodeJS.ProcessEnv;
+    expect(() => assertRealModeConfig(loadConfig(withAdmins), withAdmins)).not.toThrow();
+  });
+
+  test('a non-Google issuer still boots without domain config (the Keycloak path, unchanged)', () => {
+    const env = {
+      ...REAL,
+      OIDC_ISSUER: 'http://localhost:8081/realms/switchboard',
+      OIDC_CLIENT_ID: 'switchboard',
+      OIDC_CLIENT_SECRET: 'shh',
+    } as NodeJS.ProcessEnv;
+    expect(() => assertRealModeConfig(loadConfig(env), env)).not.toThrow();
+  });
+
+  // failure path: the allow-list is meaningless without its domain — half a
+  // family is a boot refusal, same posture as partial Twilio below.
+  test('AUTH_ADMIN_EMAILS without AUTH_ALLOWED_DOMAIN refuses to boot', () => {
+    const env = {
+      ...REAL,
+      OIDC_ISSUER: 'https://accounts.example.com',
+      OIDC_CLIENT_ID: 'switchboard',
+      OIDC_CLIENT_SECRET: 'shh',
+      AUTH_ADMIN_EMAILS: 'boss@corp.com',
+    } as NodeJS.ProcessEnv;
+    expect(() => assertRealModeConfig(loadConfig(env), env)).toThrow(
+      /AUTH_ADMIN_EMAILS is set but AUTH_ALLOWED_DOMAIN/,
+    );
+  });
+
+  // failure path: an allow-listed address the domain gate would always refuse
+  // is a dead admin grant (typo'd domain or entry) — refuse it loudly at boot.
+  test('an admin email outside the allowed domain refuses to boot, naming the entry', () => {
+    const env = {
+      ...GOOGLE_IDP,
+      AUTH_ALLOWED_DOMAIN: 'corp.com',
+      AUTH_ADMIN_EMAILS: 'boss@corp.com, boss@personal-gmail.com',
+    } as NodeJS.ProcessEnv;
+    expect(() => assertRealModeConfig(loadConfig(env), env)).toThrow(/boss@personal-gmail\.com/);
+  });
+
+  test('MOCK_MODE=1 ignores the whole family (dev-login path, zero config)', () => {
+    const env = { MOCK_MODE: '1', AUTH_ADMIN_EMAILS: 'boss@corp.com' } as NodeJS.ProcessEnv;
+    expect(() => assertRealModeConfig(loadConfig(env), env)).not.toThrow();
+  });
+});
+
 // Real mode + Gmail configured ⇒ /wh/gmail will mount ⇒ the push token is
 // mandatory (CONTRACTS §C7 "signature-verified"; an untokened verifier accepts
 // any parseable envelope from the open internet).

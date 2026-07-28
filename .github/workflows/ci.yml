@@ -204,6 +204,70 @@ jobs:
         working-directory: deploy
         run: docker compose ps
 
+      # A freshly migrated database is EMPTY — the migrations insert no rows at
+      # all. Measured on a clean stack, the only table with live tuples is
+      # `__drizzle_migrations`. Two separate consequences:
+      #
+      #   1. Reference data (lead_statuses, opportunity_stages, org_settings) is
+      #      missing, which makes the app non-functional rather than merely bare:
+      #      a lead cannot be created without a status. That is now fixed at boot
+      #      by the api entrypoint (`BOOTSTRAP_ON_BOOT`, default on), so nothing
+      #      is needed here for it — the assertion below just proves it happened.
+      #   2. There are no users and no work, so the smoke can neither sign in
+      #      (mock-mode dev-login reads the `users` table directly) nor find an
+      #      inbox item to complete. That needs the demo dataset, which is
+      #      deliberately NOT automatic: `seed-demo` refuses unless
+      #      ALLOW_DEMO_SEED=1 is set on the command AND the database contains no
+      #      rows the seed did not author. Both conditions hold here and nowhere
+      #      near a production host.
+      #
+      # `docker compose run --rm -e APP_ROLE=admin api <cmd>` is the in-image
+      # admin CLI path (deploy/scripts/entrypoint.sh). The api image is the only
+      # thing built here, so this needs no extra tooling on the runner.
+      - name: Assert boot-time reference data, then seed the demo dataset
+        working-directory: deploy
+        run: |
+          set -eu
+          echo "::group::reference data — assert the entrypoint already created it"
+          # A re-run of an idempotent command must report zero inserts. If it
+          # reports non-zero, BOOTSTRAP_ON_BOOT did not run and the stack came up
+          # unable to create a lead — that is the bug this asserts against, not a
+          # cosmetic detail.
+          out=$(docker compose run --rm -T -e APP_ROLE=admin api bootstrap --json)
+          echo "$out"
+          # The entrypoint echoes a banner line before the CLI's JSON, so parse
+          # from the first brace.
+          printf '%s' "$out" | node -e '
+            let s = "";
+            process.stdin.on("data", (d) => { s += d; });
+            process.stdin.on("end", () => {
+              const r = JSON.parse(s.slice(s.indexOf("{")));
+              const extra = r.leadStatuses + r.opportunityStages + r.orgSettings;
+              if (extra !== 0) {
+                console.error("reference data was MISSING after boot: " + JSON.stringify(r));
+                process.exit(1);
+              }
+              console.log("reference data present at boot (re-run inserted nothing)");
+            });
+          '
+          echo "::endgroup::"
+          echo "::group::demo seed (explicitly gated)"
+          docker compose run --rm -T \
+            -e APP_ROLE=admin \
+            -e ALLOW_DEMO_SEED=1 \
+            api seed-demo
+          echo "::endgroup::"
+
+      # Fail here, loudly, rather than three checks later as "no admin button" /
+      # "0 Complete buttons". `/api/v1/auth/dev-users` is the picker's own source
+      # and is unauthenticated in MOCK_MODE.
+      - name: Verify the seeded stack has users to sign in as
+        run: |
+          set -eu
+          users=$(curl -fsS http://localhost:8080/api/v1/auth/dev-users | grep -o '"id"' | wc -l)
+          echo "dev-users: $users"
+          test "$users" -gt 0
+
       # e2e/ is deliberately outside the pnpm workspace (its browser deps stay
       # out of the application graph), so it installs standalone — same as
       # .github/workflows/e2e.yml.

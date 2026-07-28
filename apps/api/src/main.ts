@@ -169,6 +169,43 @@ export function assertRealModeConfig(config: AppConfig, env: NodeJS.ProcessEnv):
         'Set them (HUMAN_TODO.md → "Company IdP OIDC app") or run MOCK_MODE=1.',
     );
   }
+  // ── Role resolution must be able to admit SOMEONE ─────────────────────────
+  // Google's ID tokens carry no `groups` claim, so pointing OIDC_ISSUER at
+  // accounts.google.com without the verified-domain strategy configured means
+  // EVERY login is refused at runtime (auth.denied/no_group) — an SSO that can
+  // never succeed. Refuse the boot instead. Non-Google issuers are assumed to
+  // emit groups (the pre-existing Keycloak contract) and boot as before.
+  const issuer = (env['OIDC_ISSUER'] ?? '').trim().replace(/\/+$/, '').toLowerCase();
+  if (issuer === 'https://accounts.google.com' && config.authAllowedDomain === null) {
+    throw new Error(
+      "MOCK_MODE=0 with OIDC_ISSUER=https://accounts.google.com requires AUTH_ALLOWED_DOMAIN: Google's " +
+        'ID tokens carry no `groups` claim, so without domain-based role resolution every ' +
+        'login would be refused. Set AUTH_ALLOWED_DOMAIN to your Workspace domain (and ' +
+        'AUTH_ADMIN_EMAILS for admins), or use an IdP that emits the groups claim.',
+    );
+  }
+  // The admin allow-list only exists inside the domain strategy — set without
+  // its domain it grants nobody anything, silently. Half-configured family ⇒
+  // boot refusal, same posture as partial Twilio config below.
+  if (config.authAdminEmails.length > 0 && config.authAllowedDomain === null) {
+    throw new Error(
+      'AUTH_ADMIN_EMAILS is set but AUTH_ALLOWED_DOMAIN is not: the admin allow-list only ' +
+        'applies to domain-based role resolution. Set AUTH_ALLOWED_DOMAIN, or unset AUTH_ADMIN_EMAILS.',
+    );
+  }
+  // An allow-listed address outside the domain can never log in (the domain
+  // gate refuses it first) — a dead admin grant is a typo; refuse it loudly.
+  const allowedDomain = config.authAllowedDomain;
+  if (allowedDomain !== null) {
+    const outside = config.authAdminEmails.filter((e) => !e.endsWith(`@${allowedDomain}`));
+    if (outside.length > 0) {
+      throw new Error(
+        `AUTH_ADMIN_EMAILS entries outside AUTH_ALLOWED_DOMAIN '${allowedDomain}' can never ` +
+          `log in (the domain gate refuses them before the role grant): ${outside.join(', ')}. ` +
+          'Fix the entries or the domain.',
+      );
+    }
+  }
   // /wh/gmail mounts iff Gmail is configured. When it WILL mount, the push
   // ingress must have its shared token (CONTRACTS §C7 "signature-verified") —
   // without one, any internet caller could inject webhook_inbox rows and force
@@ -702,6 +739,16 @@ export async function buildProductionApp(options: BuildOptions = {}): Promise<Bu
       redirectUri: `${webOrigin}/api/v1/auth/callback`,
       postLoginRedirect: `${webOrigin}/inbox`,
       loginErrorRedirect: `${webOrigin}/login`,
+      // Verified-Workspace-domain role resolution (rbac.ts) — the Google path.
+      // Absent ⇒ groups-only, exactly the pre-existing Keycloak behaviour.
+      ...(config.authAllowedDomain !== null
+        ? {
+            domainRbac: {
+              allowedDomain: config.authAllowedDomain,
+              adminEmails: new Set(config.authAdminEmails),
+            },
+          }
+        : {}),
     });
   }
 

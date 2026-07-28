@@ -222,6 +222,47 @@ test('a blank provider env line is unset, not an empty-string credential (D-061)
   expect(config.publicWebhookUrl).toBeNull();
 });
 
+// ── AUTH_ALLOWED_DOMAIN / AUTH_ADMIN_EMAILS: domain-based SSO role resolution
+// (auth/rbac.ts). Shape is validated HERE unconditionally (malformed is
+// malformed in any mode); cross-field coherence lives in assertRealModeConfig.
+
+test('auth domain/admin-emails default to unset with an empty env', () => {
+  const config = loadConfig({});
+  expect(config.authAllowedDomain).toBeNull();
+  expect(config.authAdminEmails).toEqual([]);
+});
+
+test('a blank or whitespace-only AUTH_ALLOWED_DOMAIN is unset (env-file convention)', () => {
+  expect(loadConfig({ AUTH_ALLOWED_DOMAIN: '' }).authAllowedDomain).toBeNull();
+  expect(loadConfig({ AUTH_ALLOWED_DOMAIN: '   ' }).authAllowedDomain).toBeNull();
+  expect(loadConfig({ AUTH_ADMIN_EMAILS: '' }).authAdminEmails).toEqual([]);
+  expect(loadConfig({ AUTH_ADMIN_EMAILS: ' , ,' }).authAdminEmails).toEqual([]);
+});
+
+test('AUTH_ALLOWED_DOMAIN is trimmed + lowercased (compared against the hd claim)', () => {
+  expect(loadConfig({ AUTH_ALLOWED_DOMAIN: '  Corp.COM ' }).authAllowedDomain).toBe('corp.com');
+});
+
+test('a malformed AUTH_ALLOWED_DOMAIN refuses the boot instead of bouncing every login', () => {
+  for (const bad of ['https://corp.com', '@corp.com', 'corp', 'corp .com', 'corp.com/path']) {
+    expect(() => loadConfig({ AUTH_ALLOWED_DOMAIN: bad })).toThrow(/AUTH_ALLOWED_DOMAIN/);
+  }
+});
+
+test('AUTH_ADMIN_EMAILS tolerates whitespace + trailing commas, lowercases, dedupes', () => {
+  const config = loadConfig({
+    AUTH_ADMIN_EMAILS: ' Boss@Corp.com , second@corp.com,, boss@corp.com ,',
+  });
+  expect(config.authAdminEmails).toEqual(['boss@corp.com', 'second@corp.com']);
+});
+
+test('a non-email AUTH_ADMIN_EMAILS entry refuses the boot (dead admin grant)', () => {
+  expect(() => loadConfig({ AUTH_ADMIN_EMAILS: 'boss@corp.com, not-an-email' })).toThrow(
+    /AUTH_ADMIN_EMAILS entry 'not-an-email'/,
+  );
+  expect(() => loadConfig({ AUTH_ADMIN_EMAILS: 'boss@corp' })).toThrow(/AUTH_ADMIN_EMAILS/);
+});
+
 test('mock mode / non-production boots without LIST_UNSUBSCRIBE_SECRET (dev default, distinct from session dev default)', () => {
   const dev = loadConfig({});
   expect(dev.listUnsubscribeSecret).toBe('dev-insecure-unsubscribe-secret');

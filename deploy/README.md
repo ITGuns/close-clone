@@ -54,6 +54,11 @@ docker compose -f deploy/docker-compose.yml up -d --build
 Then verify per **`deploy/VERIFY.md`** (compose config validates, all health
 checks go green, `/healthz` responds, the restore drill prints PASS).
 
+The stack comes up with the reference data it needs to function (see
+**Seeding** below). It does **not** come up with any leads, contacts or users —
+that is deliberate. If you want a populated app to look at, seed the demo
+dataset explicitly.
+
 Stop / tear down:
 
 ```bash
@@ -164,23 +169,113 @@ network.
 
 ## Services & health
 
-| Service                          | Image                           | Health probe                  | Notes                                             |
-| -------------------------------- | ------------------------------- | ----------------------------- | ------------------------------------------------- |
-| `web`                            | `switchboard-web:0.1.0` (built) | `GET /nginx-health`           | Non-root nginx-unprivileged, :8080.               |
-| `api`                            | `switchboard-api:0.1.0` (built) | `GET /healthz`                | server role; migrates on boot.                    |
-| `worker`                         | `switchboard-api:0.1.0` (built) | heartbeat file                | **Profile `worker`, OFF by default** (see below). |
-| `postgres`                       | `postgres:16`                   | `pg_isready`                  | Data volume + WAL-archive volume.                 |
-| `redis`                          | `redis:7`                       | `redis-cli ping`              | Append-only persistence.                          |
-| `glitchtip` / `glitchtip-worker` | `glitchtip/glitchtip:v4.0`      | HTTP `/health/` / celery ping | **Profile `glitchtip`, OFF by default.**          |
+| Service                          | Image                           | Health probe                  | Notes                                                      |
+| -------------------------------- | ------------------------------- | ----------------------------- | ---------------------------------------------------------- |
+| `web`                            | `switchboard-web:0.1.0` (built) | `GET /nginx-health`           | Non-root nginx-unprivileged, :8080.                        |
+| `api`                            | `switchboard-api:0.1.0` (built) | `GET /healthz`                | server role; migrates + bootstraps reference data on boot. |
+| `worker`                         | `switchboard-api:0.1.0` (built) | heartbeat file                | **Profile `worker`, OFF by default** (see below).          |
+| `postgres`                       | `postgres:16`                   | `pg_isready`                  | Data volume + WAL-archive volume.                          |
+| `redis`                          | `redis:7`                       | `redis-cli ping`              | Append-only persistence.                                   |
+| `glitchtip` / `glitchtip-worker` | `glitchtip/glitchtip:v4.0`      | HTTP `/health/` / celery ping | **Profile `glitchtip`, OFF by default.**                   |
 
 `depends_on` uses health conditions: `api` waits for postgres+redis healthy; `web`
 waits for api healthy. Every service has a restart policy (`unless-stopped`) and a
 memory limit sized for a small VM (honoured by `docker compose up` in Compose v2).
 
+## Seeding — three tiers, two commands, one gate
+
+A freshly migrated database is completely empty: the migrations insert **no**
+rows (`grep "INSERT INTO" apps/api/src/db/migrations/*.sql` returns nothing). On
+a measured clean stack the only table with live tuples is
+`__drizzle_migrations`. That is not merely "bare" — it is **non-functional**:
+
+| Missing                    | Consequence                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lead_statuses`            | A lead cannot be created at all, and the board has no columns.                                                                                                                                                                                                                                                                                                    |
+| `opportunity_stages`       | Same for opportunities / the pipeline.                                                                                                                                                                                                                                                                                                                            |
+| `org_settings` (singleton) | `GET /api/v1/admin/org-settings` returns 404 and the admin settings screen is dead. The send engine also falls back to _hardcoded_ policy (`DEFAULT_DAILY_CAP`, tz `UTC`, the I-QUIET default window) instead of configured policy. The rails still fail **safe** — `parseQuietHours` defaults to 08:00–21:00 — so this is a configuration gap, not an open rail. |
+
+### Tier 1 — reference data (automatic, production-correct)
+
+`switchboard-admin bootstrap` creates exactly the three things above. It is
+**additive and idempotent**: it never modifies an existing row, never adds a
+second `org_settings`, and skips a status/stage label that already exists under
+a different id. It creates **no users and no business data**, so it carries no
+gate — it is correct to run against production, and it runs **automatically on
+api boot** (`deploy/scripts/entrypoint.sh`, `BOOTSTRAP_ON_BOOT`, default on).
+
+```bash
+# Manual run (rarely needed — the entrypoint does it):
+docker compose -f deploy/docker-compose.yml run --rm -e APP_ROLE=admin api bootstrap
+# Skip the boot-time run (e.g. a replica that must not write):
+BOOTSTRAP_ON_BOOT=0
+```
+
+### Tier 2 — an initial admin user: deliberately not implemented
+
+Switchboard has **no password store**; the IdP assertion is the only credential.
+`apps/api/src/auth/provisioning.ts` upserts the user just-in-time on first login
+and `groupsToRole` derives `admin` from the `sales-crm-admins` directory group,
+so the first admin provisions themselves. A pre-created row would be either
+unreachable (no `idp_subject` anyone can present) or a duplicate identity for
+someone who already has one. Nothing to do here.
+
+_(In `MOCK_MODE=1` the dev-login picker does read the `users` table directly, so a
+mock stack needs users — those come from the demo seed below, which is where
+fictional identities belong.)_
+
+### Tier 3 — demo / CI data (explicitly gated)
+
+`switchboard-admin seed-demo` loads 10 fictional companies with contacts,
+overdue tasks, opportunities, notes and timeline activities, plus three demo
+users (one admin). This is what makes the app look worked-in and gives the
+container smoke something to sign in as and complete.
+
+**It refuses by default.** Three independent things must line up:
+
+1. **`ALLOW_DEMO_SEED=1` must be set on the command.** Exactly the string `1`.
+   It is deliberately _not_ inferred from `MOCK_MODE`, `NODE_ENV`, or an empty
+   database — a mock-mode stack is an ordinary thing to run and must not imply
+   consent to write fixture data. `--force` does **not** override this.
+2. **The database must contain nothing the seed did not author.** The probe is
+   `id NOT IN (<the ids this dataset occupies>)` on every table it writes, plus
+   a plain count on the tables it never writes (`email_messages`, `calls`,
+   `sms_messages`, `suppressions`, `api_tokens`, …). The refusal names the
+   tables and counts. `--force` overrides **only** this check.
+3. **The data itself cannot reach anyone.** Every address is under
+   `demo.switchboard.invalid` (RFC 2606 reserved TLD — it can never resolve) and
+   every phone number is in the NANP fictional block 555-0100…555-0199. Not a
+   gate; a blast radius.
+
+```bash
+docker compose -f deploy/docker-compose.yml run --rm \
+  -e APP_ROLE=admin -e ALLOW_DEMO_SEED=1 api seed-demo
+```
+
+Ids and content are derived from a fixed namespace and a fixed anchor timestamp,
+so re-running is a genuine no-op (`already present — nothing inserted`), not a
+duplicate. Pass `--anchor <iso>` for a demo dated relative to a different
+instant — e.g. `--anchor "$(date -u +%Y-%m-%dT%H:%M:%SZ)"` for one that looks
+worked this week. Open tasks are always placed _before_ the anchor so the inbox
+has work regardless.
+
+### The admin CLI inside a container
+
+`APP_ROLE=admin` runs `switchboard-admin` with whatever arguments follow — the
+only path to the admin CLI from a composed stack (the image ships no other
+entry for it):
+
+```bash
+docker compose -f deploy/docker-compose.yml run --rm -e APP_ROLE=admin api help
+docker compose -f deploy/docker-compose.yml run --rm -e APP_ROLE=admin api user-lookup ada
+```
+
+It does **not** migrate — the `server` role owns schema changes.
+
 ## Workers & multi-replica
 
 `api` and `worker` are the **same image**; the role is chosen by `APP_ROLE`
-(`server` | `worker`) in `deploy/scripts/entrypoint.sh`.
+(`server` | `worker` | `admin`) in `deploy/scripts/entrypoint.sh`.
 
 - **v1 (default):** the sequence sweeper/sender runs **in-process** in the `api`
   server. The dedicated `worker` service is **profile-gated OFF** because the

@@ -52,6 +52,9 @@ const claimsSchema = z
     email_verified: z.boolean().optional(),
     name: z.string().optional(),
     groups: z.array(z.string()).optional(),
+    /** Google Workspace hosted-domain. Only trustworthy BECAUSE it rides the
+     *  verified token — rbac.ts's domain strategy gates login on it. */
+    hd: z.string().optional(),
   })
   .passthrough();
 

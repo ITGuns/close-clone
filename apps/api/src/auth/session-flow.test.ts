@@ -28,13 +28,15 @@ let ctx: TestDb;
 let app: FastifyInstance;
 let issuer: LocalOidcIssuer;
 let session: SessionCodec;
+let txn: OidcTxnCodec;
+let client: OidcClient;
 
 beforeEach(async () => {
   ctx = await createTestDb();
   issuer = new LocalOidcIssuer({ now });
   session = new SessionCodec({ secret: 'sess', secure: false, now });
-  const txn = new OidcTxnCodec({ secret: 'txn', secure: false, now });
-  const client = new OidcClient({
+  txn = new OidcTxnCodec({ secret: 'txn', secure: false, now });
+  client = new OidcClient({
     issuer: issuer.issuer,
     clientId: CLIENT,
     clientSecret: 'shh',
@@ -84,8 +86,10 @@ function decodeTxn(value: string): { state: string; nonce: string } {
 }
 
 /** Drive /auth/login and return the txn cookie value + its decoded state/nonce. */
-async function startLogin(): Promise<{ txnValue: string; state: string; nonce: string }> {
-  const res = await app.inject({ method: 'GET', url: '/api/v1/auth/login' });
+async function startLogin(
+  on: FastifyInstance = app,
+): Promise<{ txnValue: string; state: string; nonce: string }> {
+  const res = await on.inject({ method: 'GET', url: '/api/v1/auth/login' });
   expect(res.statusCode).toBe(302);
   const txn = cookie(res, OIDC_TXN_COOKIE_NAME);
   expect(txn).toBeDefined();
@@ -254,6 +258,174 @@ describe('denial paths', () => {
     });
     expect(cb.statusCode).toBe(302);
     expect(cb.headers.location).toContain('error=expired');
+  });
+});
+
+// ── Verified-domain role resolution (the direct-Google path, no groups claim) ─
+
+describe('domain-based role resolution', () => {
+  let domainApp: FastifyInstance;
+
+  beforeEach(async () => {
+    // Same DB/issuer/codecs as the outer app — only the deps differ: this app
+    // has the domain strategy configured the way main.ts wires it from
+    // AUTH_ALLOWED_DOMAIN / AUTH_ADMIN_EMAILS.
+    domainApp = Fastify({ logger: false });
+    registerOidcAuthRoutes(domainApp, {
+      db: ctx.db,
+      client,
+      session,
+      txn,
+      redirectUri: REDIRECT,
+      postLoginRedirect: '/app',
+      loginErrorRedirect: '/login',
+      domainRbac: { allowedDomain: 'corp.test', adminEmails: new Set(['boss@corp.test']) },
+    });
+    await domainApp.ready();
+  });
+
+  afterEach(async () => {
+    await domainApp.close();
+  });
+
+  /** Complete a login on domainApp for the given claims; returns the callback response. */
+  async function loginWith(claims: {
+    sub: string;
+    email?: string;
+    name?: string;
+    groups?: string[];
+    extra?: Record<string, unknown>;
+  }): Promise<{ statusCode: number; location: string; sessionValue: string | undefined }> {
+    const { txnValue, state, nonce } = await startLogin(domainApp);
+    const code = issuer.authorize({ ...claims, nonce });
+    const cb = await domainApp.inject({
+      method: 'GET',
+      url: `/api/v1/auth/callback?code=${code}&state=${state}`,
+      headers: { cookie: `${OIDC_TXN_COOKIE_NAME}=${txnValue}` },
+    });
+    return {
+      statusCode: cb.statusCode,
+      location: String(cb.headers.location),
+      sessionValue: cookie(cb, SESSION_COOKIE_NAME)?.value,
+    };
+  }
+
+  async function deniedReasons(): Promise<(string | null)[]> {
+    const rows = await ctx.db.select().from(auditLog).where(eq(auditLog.action, 'auth.denied'));
+    return rows.map((r) => r.reason);
+  }
+
+  test('a Workspace user in the domain logs in as rep', async () => {
+    const res = await loginWith({
+      sub: 'google|ws-rep',
+      email: 'rep@corp.test',
+      name: 'Workspace Rep',
+      extra: { hd: 'corp.test', email_verified: true },
+    });
+    expect(res.statusCode).toBe(302);
+    expect(res.location).toBe('/app');
+    expect(res.sessionValue).toBeTruthy();
+    const [row] = await ctx.db.select().from(users).where(eq(users.idpSubject, 'google|ws-rep'));
+    expect(row?.role).toBe('rep');
+  });
+
+  test('an allow-listed address logs in as admin (case-insensitive)', async () => {
+    const res = await loginWith({
+      sub: 'google|ws-boss',
+      email: 'Boss@Corp.TEST',
+      name: 'The Boss',
+      extra: { hd: 'corp.test', email_verified: true },
+    });
+    expect(res.location).toBe('/app');
+    const [row] = await ctx.db.select().from(users).where(eq(users.idpSubject, 'google|ws-boss'));
+    expect(row?.role).toBe('admin');
+  });
+
+  test('a personal gmail.com account (no hd) is REFUSED, unprovisioned, audited domain_no_hd', async () => {
+    const res = await loginWith({
+      sub: 'google|personal',
+      email: 'anyone@gmail.com',
+      extra: { email_verified: true },
+    });
+    expect(res.statusCode).toBe(302);
+    expect(res.location).toContain('error=no_access');
+    expect(res.sessionValue).toBeUndefined();
+    const rows = await ctx.db.select().from(users).where(eq(users.idpSubject, 'google|personal'));
+    expect(rows).toHaveLength(0);
+    expect(await deniedReasons()).toContain('domain_no_hd');
+  });
+
+  test('a Workspace account from the WRONG domain is refused and audited domain_hd_mismatch', async () => {
+    const res = await loginWith({
+      sub: 'google|other-ws',
+      email: 'rep@other.test',
+      extra: { hd: 'other.test', email_verified: true },
+    });
+    expect(res.location).toContain('error=no_access');
+    expect(res.sessionValue).toBeUndefined();
+    expect(await deniedReasons()).toContain('domain_hd_mismatch');
+  });
+
+  test('an unverified email is refused and audited domain_email_unverified — even in-domain and allow-listed', async () => {
+    const res = await loginWith({
+      sub: 'google|unverified',
+      email: 'boss@corp.test',
+      extra: { hd: 'corp.test', email_verified: false },
+    });
+    expect(res.location).toContain('error=no_access');
+    expect(res.sessionValue).toBeUndefined();
+    expect(await deniedReasons()).toContain('domain_email_unverified');
+  });
+
+  test('a token with no email is refused and audited domain_no_email', async () => {
+    const res = await loginWith({
+      sub: 'google|no-email',
+      extra: { hd: 'corp.test', email_verified: true },
+    });
+    expect(res.location).toContain('error=no_access');
+    expect(await deniedReasons()).toContain('domain_no_email');
+  });
+
+  test('the groups path still works unchanged on an app WITH domain config (Keycloak coexists)', async () => {
+    const res = await loginWith({
+      sub: 'kc|admin',
+      email: 'kc-admin@corp.test',
+      groups: ['sales-crm-admins'],
+    });
+    expect(res.location).toBe('/app');
+    const [row] = await ctx.db.select().from(users).where(eq(users.idpSubject, 'kc|admin'));
+    expect(row?.role).toBe('admin');
+  });
+
+  test('a groups claim granting nothing is refused no_group — the domain never resurrects it', async () => {
+    const res = await loginWith({
+      sub: 'kc|nogroup',
+      email: 'boss@corp.test', // in-domain AND allow-listed…
+      groups: ['some-other-team'], // …but the IdP's groups decision stands
+      extra: { hd: 'corp.test', email_verified: true },
+    });
+    expect(res.location).toContain('error=no_access');
+    expect(res.sessionValue).toBeUndefined();
+    expect(await deniedReasons()).toContain('no_group');
+  });
+
+  test('WITHOUT domain config a groups-less Google-style token stays refused (no_group, pre-existing)', async () => {
+    // The outer `app` has no domainRbac — the strategy is opt-in.
+    const { txnValue, state, nonce } = await startLogin();
+    const code = issuer.authorize({
+      sub: 'google|no-strategy',
+      nonce,
+      email: 'rep@corp.test',
+      extra: { hd: 'corp.test', email_verified: true },
+    });
+    const cb = await app.inject({
+      method: 'GET',
+      url: `/api/v1/auth/callback?code=${code}&state=${state}`,
+      headers: { cookie: `${OIDC_TXN_COOKIE_NAME}=${txnValue}` },
+    });
+    expect(cb.headers.location).toContain('error=no_access');
+    expect(cookie(cb, SESSION_COOKIE_NAME)).toBeUndefined();
+    expect(await deniedReasons()).toContain('no_group');
   });
 });
 

@@ -73,6 +73,63 @@ const envSchema = z.object({
   PUBLIC_WEBHOOK_URL: z.string().min(1).optional(),
 });
 
+// ── Domain-based SSO role resolution (auth/rbac.ts) — for IdPs that emit no
+// `groups` claim (Google Workspace direct). Shape-validated + normalised by the
+// parsers below (unconditionally: a malformed value is malformed in any mode);
+// cross-field coherence (admins ⊆ domain, Google issuer requires the domain) is
+// real-mode-gated in main.ts assertRealModeConfig.
+
+/**
+ * A bare DNS domain (`corp.com`): labels of letters/digits/hyphens, at least
+ * one dot, no scheme/`@`/path. Anything else is refused AT BOOT — a malformed
+ * AUTH_ALLOWED_DOMAIN would otherwise fail closed at runtime by bouncing every
+ * login, which is safe but undebuggable.
+ */
+const AUTH_DOMAIN_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/;
+
+/** One `local@domain.tld` shape per entry — a non-email entry can never match a
+ *  verified email, i.e. it is a dead admin grant; refuse loudly at boot. */
+const AUTH_ADMIN_EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+/**
+ * `AUTH_ALLOWED_DOMAIN` → normalised lowercase domain, or null when unset/blank.
+ * Throws on a malformed value (see {@link AUTH_DOMAIN_RE}).
+ */
+function parseAllowedDomain(raw: string | undefined): string | null {
+  const trimmed = raw?.trim().toLowerCase() ?? '';
+  if (trimmed === '') return null;
+  if (!AUTH_DOMAIN_RE.test(trimmed)) {
+    throw new Error(
+      `AUTH_ALLOWED_DOMAIN must be a bare Workspace domain like "example.com" ` +
+        `(got '${trimmed}'): no scheme, no "@", no path — it is compared against ` +
+        `the Google ID token's \`hd\` claim.`,
+    );
+  }
+  return trimmed;
+}
+
+/**
+ * `AUTH_ADMIN_EMAILS` (comma-separated) → normalised lowercase, deduplicated
+ * list. Whitespace around entries and stray/trailing commas are tolerated;
+ * a non-email entry throws (dead grant — see {@link AUTH_ADMIN_EMAIL_RE}).
+ */
+function parseAdminEmails(raw: string | undefined): string[] {
+  if (raw === undefined) return [];
+  const emails: string[] = [];
+  for (const part of raw.split(',')) {
+    const entry = part.trim().toLowerCase();
+    if (entry === '') continue;
+    if (!AUTH_ADMIN_EMAIL_RE.test(entry)) {
+      throw new Error(
+        `AUTH_ADMIN_EMAILS entry '${entry}' is not an email address; expected a ` +
+          `comma-separated list like "alice@corp.com, bob@corp.com".`,
+      );
+    }
+    if (!emails.includes(entry)) emails.push(entry);
+  }
+  return emails;
+}
+
 /**
  * Env-file convention (D-061): a blank `VAR=` line in a compose env_file reaches
  * the process as '' — treat it exactly like unset, so `??`/default fallbacks fire
@@ -103,6 +160,19 @@ export interface AppConfig {
   anthropicApiKey: string | null;
   /** Public origin for /wh/* callbacks + unsubscribe links. null ⇒ unset. */
   publicWebhookUrl: string | null;
+  /**
+   * Workspace domain for verified-domain role resolution (auth/rbac.ts),
+   * lowercase. null ⇒ unset ⇒ groups-only RBAC (the Keycloak path). Real mode
+   * with OIDC_ISSUER = accounts.google.com REQUIRES it (assertRealModeConfig):
+   * Google emits no `groups` claim, so without it every login is refused.
+   */
+  authAllowedDomain: string | null;
+  /**
+   * Lowercased, deduplicated admin allow-list for the domain strategy. Empty ⇒
+   * everyone in the domain is `rep`. Only meaningful with authAllowedDomain
+   * (set without it, real mode refuses to boot — a dead grant is a misconfig).
+   */
+  authAdminEmails: readonly string[];
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -191,5 +261,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     deepgramApiKey: parsed.DEEPGRAM_API_KEY ?? null,
     anthropicApiKey: parsed.ANTHROPIC_API_KEY ?? null,
     publicWebhookUrl: parsed.PUBLIC_WEBHOOK_URL ?? null,
+    // Blank/whitespace-only ⇒ unset (the D-061 env-file convention); malformed
+    // values throw here so the boot fails loud instead of bouncing every login.
+    authAllowedDomain: parseAllowedDomain(env.AUTH_ALLOWED_DOMAIN),
+    authAdminEmails: parseAdminEmails(env.AUTH_ADMIN_EMAILS),
   };
 }

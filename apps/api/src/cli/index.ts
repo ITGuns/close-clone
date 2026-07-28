@@ -5,6 +5,7 @@ import pg from 'pg';
 
 import { loadConfig } from '../config.ts';
 import type { Db } from '../db/index.ts';
+import { bootstrapReferenceData, seedDemoData } from '../services/seed/index.ts';
 import { flagBool, flagString, parseArgs } from './args.ts';
 import { hardDeleteLead } from './hard-delete.ts';
 import { mergeLeads } from './merge.ts';
@@ -43,8 +44,76 @@ function printUsage(out: Out): void {
   out('  user-lookup <emailOrName>');
   out('  merge-leads <winnerId> <loserId> [--actor <userId>]');
   out('  hard-delete-lead <leadId> --reason <text> [--force] [--actor <userId>]');
+  out('  bootstrap                       create required reference data (safe on prod)');
+  out('  seed-demo [--anchor <iso>] [--force]');
+  out('                                  load the demo/CI dataset — requires');
+  out('                                  ALLOW_DEMO_SEED=1 in the environment');
   out('');
   out('Global flags: --json (machine-readable output), --actor <userId>');
+}
+
+/**
+ * `bootstrap` — tier 1. Reference data only (`lead_statuses`,
+ * `opportunity_stages`, `org_settings`). Idempotent and additive, so it carries
+ * no gate: a fresh deployment CANNOT create a lead until this has run, and
+ * running it twice is a no-op.
+ */
+async function runBootstrap(db: Db, json: boolean, out: Out): Promise<number> {
+  const result = await bootstrapReferenceData(db);
+  if (json) {
+    out(JSON.stringify(result, null, 2));
+    return 0;
+  }
+  const total = result.leadStatuses + result.opportunityStages + result.orgSettings;
+  out(total === 0 ? 'reference data already present — nothing to do' : 'reference data created');
+  out(
+    `  lead_statuses=+${result.leadStatuses} opportunity_stages=+${result.opportunityStages} ` +
+      `org_settings=+${result.orgSettings}`,
+  );
+  return 0;
+}
+
+/**
+ * `seed-demo` — tier 3. Fictional leads/contacts/tasks. Refuses unless
+ * `ALLOW_DEMO_SEED=1` is set AND the database contains nothing the seed did not
+ * author (`--force` overrides only the latter). See services/seed/demo.ts.
+ */
+async function runSeedDemo(
+  db: Db,
+  flags: Record<string, string | boolean>,
+  json: boolean,
+  out: Out,
+): Promise<number> {
+  const anchor = flagString(flags, 'anchor');
+  const result = await seedDemoData(db, {
+    force: flagBool(flags, 'force'),
+    ...(anchor === undefined ? {} : { anchor }),
+  });
+  if (json) {
+    out(JSON.stringify(result, null, 2));
+    return 0;
+  }
+  out(
+    result.alreadySeeded
+      ? 'demo data already present — nothing inserted'
+      : `demo data seeded (anchor ${result.anchor})`,
+  );
+  out(
+    `  reference: lead_statuses=+${result.reference.leadStatuses} ` +
+      `opportunity_stages=+${result.reference.opportunityStages} ` +
+      `org_settings=+${result.reference.orgSettings}`,
+  );
+  const inserted = Object.entries(result.inserted)
+    .map(([table, n]) => `${table}=+${n}`)
+    .join(' ');
+  out(`  inserted:  ${inserted}`);
+  if (result.foreignRows.length > 0) {
+    out(
+      `  WARNING --force was used; pre-existing foreign rows: ` +
+        result.foreignRows.map((f) => `${f.table}=${f.count}`).join(' '),
+    );
+  }
+  return 0;
 }
 
 function resolveActor(
@@ -173,6 +242,10 @@ export async function runCli(argv: readonly string[], db: Db, out: Out, err: Out
         return await runMergeLeads(db, parsed.positionals, parsed.flags, json, out, err);
       case 'hard-delete-lead':
         return await runHardDelete(db, parsed.positionals, parsed.flags, json, out, err);
+      case 'bootstrap':
+        return await runBootstrap(db, json, out);
+      case 'seed-demo':
+        return await runSeedDemo(db, parsed.flags, json, out);
       default:
         printUsage(out);
         return parsed.command === null || parsed.command === 'help' ? 0 : 1;
