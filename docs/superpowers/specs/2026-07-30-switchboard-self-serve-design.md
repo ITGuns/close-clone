@@ -59,19 +59,19 @@ Decision D-T1).
 
 ## 4. Recorded decisions
 
-| # | Decision | Rationale |
-|---|----------|-----------|
-| D-T1 | First-run state = `localStorage` key `sb-tour-v1:<user.id>` (value `'1'`), plus a global kill-switch key `sb-tour-suppress` | Mirrors the proven `useIgnition.ts` pattern (pure decision fn + storage flag, try/catch-safe). Avoids a `CONTRACTS.md` bump. The suppress key keeps the existing jsdom suite and Playwright storageState green without touching dozens of tests, and doubles as a demo kill-switch. |
-| D-T2 | Auto-open hook point = a `TourProvider` mounted in `AppShell` (`ShellChrome`), **not** `RootGate` | The tour anchors to shell chrome that exists on every authenticated route; hooking `RootGate` would miss deep links (a rep whose first visit is `/leads/123` still deserves the tour) and would entangle auth-boot logic. `RootGate` stays untouched. |
-| D-T3 | The seen-flag is burned when the tour **auto-opens** (like `useIgnition` burns on `igniting`), not on completion | A rep who dismisses instantly is never nagged again; replay stays available from `/help`. |
-| D-T4 | Sequences has no rail entry (`PRIMARY_NAV` = inbox/leads/pipeline/views/reports, `apps/web/src/app/nav.tsx:42`), so the tour covers sequences honestly via step 5 (command palette: "sequences, dialer, import") rather than inventing an anchor | Copy must describe only real behavior (DESIGN §6). |
-| D-T5 | Anchor highlight = CSS ring (`.sb-tour-anchor`, `box-shadow` using `var(--focus)`), no scrim, no mask | Zero layout shift, works in both themes, page stays operable. |
-| D-T6 | Coachmark = **non-modal** `role="dialog"` (no `aria-modal`, no Tab trap). Focus moves into the panel on step change; Escape (document-level, capture phase, `stopPropagation` — the `Tooltip.tsx:96` pattern) ends the tour and restores focus to the pre-tour element | "Must not steal focus destructively"; capture-phase Escape means the tour closes without also closing anything beneath, and global `g <key>` chords keep working mid-tour. |
-| D-T7 | Motion: the overlay animates **only on tour open** (opacity + ≤8px transform, 150–200ms `var(--ease-out)`); step→step advances are **instant** (re-keyed mount with `data-instant`) | DESIGN §4: never animate keyboard-initiated actions. Advancing is keyboard-initiated; uniform instant advance is simpler than branching on input modality. Reduced motion: `animation: none` in the existing `@media (prefers-reduced-motion: reduce)` block of `overlays.css`. |
-| D-T8 | Tour keys (ArrowRight/ArrowLeft/Enter/Escape) are handled by a document capture-phase listener owned by the overlay, **not** registered in the keyboard registry | Transient chrome doesn't belong in the `?` cheat sheet; capture + `stopPropagation` for exactly these four keys prevents double-handling (e.g. the shell's hidden `escape` blur binding) while leaving `/`, `mod+k`, and `g` chords live. |
-| D-T9 | `ui/floating.ts` is extended additively with `side: 'left' | 'right'` and the pure `compute` function is exported (as `computeFloatingPosition`) for unit tests | Rail anchors need `side: 'right'`. Existing top/bottom behavior and all call sites unchanged. |
-| D-T10 | Replay entry = one button on `/help` (`HelpPage.tsx`) via `useTour().openTour()` | The Help page is the rail's "about the tool" home and already documents the keyboard map. A palette command was considered and dropped: feature-command wiring is more surface area than the feature warrants (YAGNI); revisit if reps ask. |
-| D-T11 | Leads "No leads yet" CTA = "Import leads" → `/import` (the real CSV wizard), rendered as a `Link className="sb-btn"` (the `SequenceDetail.tsx:85` link-as-button precedent — navigation is semantically a link). Search ("No matches") and Smart-View empty cases keep their existing behavior | The import wizard is the existing, complete get-started flow — reuse it, don't duplicate it. |
+| #     | Decision                                                                                                                                                                                                                                                                                       | Rationale                                                                                                                                                                                                                                                                           |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D-T1  | First-run state = `localStorage` key `sb-tour-v1:<user.id>` (value `'1'`), plus a global kill-switch key `sb-tour-suppress`                                                                                                                                                                    | Mirrors the proven `useIgnition.ts` pattern (pure decision fn + storage flag, try/catch-safe). Avoids a `CONTRACTS.md` bump. The suppress key keeps the existing jsdom suite and Playwright storageState green without touching dozens of tests, and doubles as a demo kill-switch. |
+| D-T2  | Auto-open hook point = a `TourProvider` mounted in `AppShell` (`ShellChrome`), **not** `RootGate`                                                                                                                                                                                              | The tour anchors to shell chrome that exists on every authenticated route; hooking `RootGate` would miss deep links (a rep whose first visit is `/leads/123` still deserves the tour) and would entangle auth-boot logic. `RootGate` stays untouched.                               |
+| D-T3  | The seen-flag is burned when the tour **auto-opens** (like `useIgnition` burns on `igniting`), not on completion                                                                                                                                                                               | A rep who dismisses instantly is never nagged again; replay stays available from `/help`.                                                                                                                                                                                           |
+| D-T4  | Sequences has no rail entry (`PRIMARY_NAV` = inbox/leads/pipeline/views/reports, `apps/web/src/app/nav.tsx:42`), so the tour covers sequences honestly via step 5 (command palette: "sequences, dialer, import") rather than inventing an anchor                                               | Copy must describe only real behavior (DESIGN §6).                                                                                                                                                                                                                                  |
+| D-T5  | Anchor highlight = CSS ring (`.sb-tour-anchor`, `box-shadow` using `var(--focus)`), no scrim, no mask                                                                                                                                                                                          | Zero layout shift, works in both themes, page stays operable.                                                                                                                                                                                                                       |
+| D-T6  | Coachmark = **non-modal** `role="dialog"` (no `aria-modal`, no Tab trap). Focus moves into the panel on step change; Escape (document-level, capture phase, `stopPropagation` — the `Tooltip.tsx:96` pattern) ends the tour and restores focus to the pre-tour element                         | "Must not steal focus destructively"; capture-phase Escape means the tour closes without also closing anything beneath, and global `g <key>` chords keep working mid-tour.                                                                                                          |
+| D-T7  | Motion: the overlay animates **only on tour open** (opacity + ≤8px transform, 150–200ms `var(--ease-out)`); step→step advances are **instant** (re-keyed mount with `data-instant`)                                                                                                            | DESIGN §4: never animate keyboard-initiated actions. Advancing is keyboard-initiated; uniform instant advance is simpler than branching on input modality. Reduced motion: `animation: none` in the existing `@media (prefers-reduced-motion: reduce)` block of `overlays.css`.     |
+| D-T8  | Tour keys (ArrowRight/ArrowLeft/Enter/Escape) are handled by a document capture-phase listener owned by the overlay, **not** registered in the keyboard registry                                                                                                                               | Transient chrome doesn't belong in the `?` cheat sheet; capture + `stopPropagation` for exactly these four keys prevents double-handling (e.g. the shell's hidden `escape` blur binding) while leaving `/`, `mod+k`, and `g` chords live.                                           |
+| D-T9  | `ui/floating.ts` is extended additively with `side: 'left'                                                                                                                                                                                                                                     | 'right'`and the pure`compute`function is exported (as`computeFloatingPosition`) for unit tests                                                                                                                                                                                      | Rail anchors need `side: 'right'`. Existing top/bottom behavior and all call sites unchanged. |
+| D-T10 | Replay entry = one button on `/help` (`HelpPage.tsx`) via `useTour().openTour()`                                                                                                                                                                                                               | The Help page is the rail's "about the tool" home and already documents the keyboard map. A palette command was considered and dropped: feature-command wiring is more surface area than the feature warrants (YAGNI); revisit if reps ask.                                         |
+| D-T11 | Leads "No leads yet" CTA = "Import leads" → `/import` (the real CSV wizard), rendered as a `Link className="sb-btn"` (the `SequenceDetail.tsx:85` link-as-button precedent — navigation is semantically a link). Search ("No matches") and Smart-View empty cases keep their existing behavior | The import wizard is the existing, complete get-started flow — reuse it, don't duplicate it.                                                                                                                                                                                        |
 
 ## 5. The guided tour
 
@@ -91,14 +91,14 @@ degrades to "never auto-open", never a throw), modeled line-for-line on
 
 ### 5.2 Steps (final copy — operator voice, short declaratives, numbers over adjectives)
 
-| # | Kind | Anchor (`data-tour`) | Title | Body | Combo hint |
-|---|------|----------------------|-------|------|-----------|
-| 1 | modal | — | Welcome to Switchboard | Your queue, your leads, your pipeline — one keyboard. This tour takes 60 seconds. | — |
-| 2 | coachmark, side right | `nav-inbox` (LeftRail) | Inbox | Everything that needs a reply, in one queue. Work it top to bottom. | `g i` |
-| 3 | coachmark, side right | `nav-leads` (LeftRail) | Leads | Every account with its full timeline — calls, email, SMS, notes in one stream. | `g l` |
-| 4 | coachmark, side right | `nav-pipeline` (LeftRail) | Pipeline | Deals by stage. Move them as they progress. | `g p` |
-| 5 | coachmark, side bottom | `topbar-search` (TopBar) | Search & commands | Search leads here. The command palette runs everything else — sequences, dialer, import. | `mod+k` |
-| 6 | modal | — | That's the board | Press ? for every live shortcut. Replay this tour from Support & FAQs. | `?` |
+| #   | Kind                   | Anchor (`data-tour`)      | Title                  | Body                                                                                     | Combo hint |
+| --- | ---------------------- | ------------------------- | ---------------------- | ---------------------------------------------------------------------------------------- | ---------- |
+| 1   | modal                  | —                         | Welcome to Switchboard | Your queue, your leads, your pipeline — one keyboard. This tour takes 60 seconds.        | —          |
+| 2   | coachmark, side right  | `nav-inbox` (LeftRail)    | Inbox                  | Everything that needs a reply, in one queue. Work it top to bottom.                      | `g i`      |
+| 3   | coachmark, side right  | `nav-leads` (LeftRail)    | Leads                  | Every account with its full timeline — calls, email, SMS, notes in one stream.           | `g l`      |
+| 4   | coachmark, side right  | `nav-pipeline` (LeftRail) | Pipeline               | Deals by stage. Move them as they progress.                                              | `g p`      |
+| 5   | coachmark, side bottom | `topbar-search` (TopBar)  | Search & commands      | Search leads here. The command palette runs everything else — sequences, dialer, import. | `mod+k`    |
+| 6   | modal                  | —                         | That's the board       | Press ? for every live shortcut. Replay this tour from Support & FAQs.                   | `?`        |
 
 Steps 1 and 6 reuse the existing `Modal` primitive (focus trap, restore, Escape — all already correct).
 Steps 2–5 use the new `Coachmark`. A missing anchor (defensive; both anchors render on every shell route,
@@ -134,28 +134,28 @@ collapsed rail included) skips forward to the next step rather than erroring.
 
 ## 6. Empty-state get-started path
 
-| Surface | File | Today | Change |
-|---------|------|-------|--------|
-| Leads (true empty, no query, no view) | `apps/web/src/features/leads/components/LeadsSurface.tsx:253` | "No leads yet", no action | add `actions`: **Import leads** — `Link className="sb-btn"` to `/import` (D-T11) |
-| Sequences (empty) | `apps/web/src/features/comms/components/SequencesList.tsx:102` | "No sequences yet", no action | add `actions`: **How sequences work** — `Link className="sb-btn"` to `/help` (honest — no create UI exists) |
-| Inbox `ZeroInbox` | `apps/web/src/features/inbox/components/ZeroInbox.tsx` | "You're all caught up" | **unchanged** — it is a done-state, not a new-user state; adding a CTA there would mislabel success as emptiness |
-| Views / Pipeline / Reports empty states | various | informational | **unchanged** (Views already has a create action; Pipeline "No pipeline stages" is an admin condition, not a rep task) |
+| Surface                                 | File                                                           | Today                         | Change                                                                                                                 |
+| --------------------------------------- | -------------------------------------------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Leads (true empty, no query, no view)   | `apps/web/src/features/leads/components/LeadsSurface.tsx:253`  | "No leads yet", no action     | add `actions`: **Import leads** — `Link className="sb-btn"` to `/import` (D-T11)                                       |
+| Sequences (empty)                       | `apps/web/src/features/comms/components/SequencesList.tsx:102` | "No sequences yet", no action | add `actions`: **How sequences work** — `Link className="sb-btn"` to `/help` (honest — no create UI exists)            |
+| Inbox `ZeroInbox`                       | `apps/web/src/features/inbox/components/ZeroInbox.tsx`         | "You're all caught up"        | **unchanged** — it is a done-state, not a new-user state; adding a CTA there would mislabel success as emptiness       |
+| Views / Pipeline / Reports empty states | various                                                        | informational                 | **unchanged** (Views already has a create action; Pipeline "No pipeline stages" is an admin condition, not a rep task) |
 
 All changes use the existing `EmptyState.actions` slot and `Button` — no new empty-state component.
 
 ## 7. Reuse map (what is NOT being built)
 
-| Need | Existing piece reused |
-|------|----------------------|
-| once-only decision + storage flag pattern | `features/welcome/useIgnition.ts` (pattern copied, not imported) |
-| anchored positioning | `ui/floating.ts` `useFloatingPosition` (extended left/right, D-T9) |
-| welcome/finish dialogs | `ui/Modal.tsx` (focus trap/restore, Escape, portal — as-is) |
-| capture-phase Escape convention | `ui/Tooltip.tsx:90-101` pattern |
-| shortcut rendering in tour copy | `keyboard/KbdCombo.tsx` (same combo strings the registry binds) |
-| get-started destination | `features/import/` CSV wizard (reused whole; not duplicated) |
-| empty-state CTA slot | `ui/EmptyState.tsx` `actions` prop |
-| tokens/motion vars | `--surface-2 --border-1 --radius-2 --shadow-2 --z-toast --dur --ease-out --focus` (all already in `styles/overlays.css`) |
-| test conventions | Vitest + Testing Library + MSW (`src/test/setup.ts`), `axe-core` a11y pattern, Playwright specs in `e2e/tests/` |
+| Need                                      | Existing piece reused                                                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| once-only decision + storage flag pattern | `features/welcome/useIgnition.ts` (pattern copied, not imported)                                                         |
+| anchored positioning                      | `ui/floating.ts` `useFloatingPosition` (extended left/right, D-T9)                                                       |
+| welcome/finish dialogs                    | `ui/Modal.tsx` (focus trap/restore, Escape, portal — as-is)                                                              |
+| capture-phase Escape convention           | `ui/Tooltip.tsx:90-101` pattern                                                                                          |
+| shortcut rendering in tour copy           | `keyboard/KbdCombo.tsx` (same combo strings the registry binds)                                                          |
+| get-started destination                   | `features/import/` CSV wizard (reused whole; not duplicated)                                                             |
+| empty-state CTA slot                      | `ui/EmptyState.tsx` `actions` prop                                                                                       |
+| tokens/motion vars                        | `--surface-2 --border-1 --radius-2 --shadow-2 --z-toast --dur --ease-out --focus` (all already in `styles/overlays.css`) |
+| test conventions                          | Vitest + Testing Library + MSW (`src/test/setup.ts`), `axe-core` a11y pattern, Playwright specs in `e2e/tests/`          |
 
 **Foreign UI stacks: none. New runtime dependencies: zero.** New files are confined to
 `features/tour/`, `ui/Coachmark.tsx`, and tests.

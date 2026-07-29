@@ -13,13 +13,7 @@ import { Button, Coachmark, Modal } from '../../ui/index.ts';
 import { KbdCombo } from '../../keyboard/index.ts';
 import { useAuth } from '../../auth/AuthProvider.tsx';
 import type { TourStep } from './tour.ts';
-import {
-  decideAutoOpen,
-  hasSeenTour,
-  isTourSuppressed,
-  markTourSeen,
-  TOUR_STEPS,
-} from './tour.ts';
+import { decideAutoOpen, hasSeenTour, isTourSuppressed, markTourSeen, TOUR_STEPS } from './tour.ts';
 
 /*
  * First-run guided tour (spec 2026-07-30-switchboard-self-serve-design.md).

@@ -18,7 +18,11 @@ describe('computeFloatingPosition — left/right sides', () => {
   it('places the panel to the right of the anchor, center-aligned vertically', () => {
     const anchor = el({ top: 300, left: 16, width: 48, height: 32 });
     const panel = el({ top: 0, left: 0, width: 280, height: 120 });
-    const pos = computeFloatingPosition(anchor, panel, { side: 'right', align: 'center', offset: 12 });
+    const pos = computeFloatingPosition(anchor, panel, {
+      side: 'right',
+      align: 'center',
+      offset: 12,
+    });
     expect(pos.side).toBe('right');
     expect(pos.style.left).toBe(76); // 16 + 48 + 12
     expect(pos.style.top).toBe(256); // 300 + 32/2 - 120/2

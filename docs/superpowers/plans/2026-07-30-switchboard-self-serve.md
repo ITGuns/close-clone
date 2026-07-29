@@ -26,10 +26,12 @@
 ### Task 1: Extend `ui/floating.ts` with left/right sides
 
 **Files:**
+
 - Modify: `apps/web/src/ui/floating.ts`
 - Test (create): `apps/web/src/ui/floating.test.ts`
 
 **Interfaces:**
+
 - Produces: `export type FloatingSide = 'top' | 'bottom' | 'left' | 'right'`; `export function computeFloatingPosition(anchor: HTMLElement, panel: HTMLElement, options: FloatingOptions): FloatingPosition` (the previously-internal `compute`, now exported); `FloatingOptions.side` and `FloatingPosition.side` widened to `FloatingSide`. `useFloatingPosition` signature unchanged.
 
 - [ ] **Step 0: Branch**
@@ -63,7 +65,11 @@ describe('computeFloatingPosition — left/right sides', () => {
   it('places the panel to the right of the anchor, center-aligned vertically', () => {
     const anchor = el({ top: 300, left: 16, width: 48, height: 32 });
     const panel = el({ top: 0, left: 0, width: 280, height: 120 });
-    const pos = computeFloatingPosition(anchor, panel, { side: 'right', align: 'center', offset: 12 });
+    const pos = computeFloatingPosition(anchor, panel, {
+      side: 'right',
+      align: 'center',
+      offset: 12,
+    });
     expect(pos.side).toBe('right');
     expect(pos.style.left).toBe(76); // 16 + 48 + 12
     expect(pos.style.top).toBe(256); // 300 + 32/2 - 120/2
@@ -199,10 +205,12 @@ git commit -m "feat(web): extend floating positioner to left/right sides, export
 ### Task 2: Tour core module (steps data + first-run decision + storage)
 
 **Files:**
+
 - Create: `apps/web/src/features/tour/tour.ts`
 - Test (create): `apps/web/src/features/tour/tour.test.ts`
 
 **Interfaces:**
+
 - Produces: `TOUR_SUPPRESS_KEY: string`; `interface TourStep { id: string; kind: 'modal' | 'anchored'; anchor?: string; side?: FloatingSide; title: string; body: string; combo?: string }`; `TOUR_STEPS: readonly TourStep[]` (6 entries); `tourSeenKey(userId: string): string`; `hasSeenTour(userId: string): boolean`; `markTourSeen(userId: string): void`; `isTourSuppressed(): boolean`; `decideAutoOpen(seen: boolean, suppressed: boolean): boolean`.
 
 - [ ] **Step 1: Write the failing test**
@@ -413,12 +421,14 @@ git commit -m "feat(web): tour step script + first-run decision core"
 ### Task 3: `Coachmark` primitive + CSS
 
 **Files:**
+
 - Create: `apps/web/src/ui/Coachmark.tsx`
 - Modify: `apps/web/src/ui/index.ts` (add export)
 - Modify: `apps/web/src/styles/overlays.css` (append styles; extend reduced-motion block)
 - Test (create): `apps/web/src/ui/Coachmark.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `useFloatingPosition`, `FloatingSide` (Task 1); `Button` (`./Button.tsx`); `cx` (`../lib/cx.ts`).
 - Produces: `export function Coachmark(props: CoachmarkProps): JSX.Element` with `CoachmarkProps = { anchor: HTMLElement; side?: FloatingSide; title: string; step: number; total: number; isLast: boolean; instant?: boolean; onNext: () => void; onBack?: (() => void) | undefined; onDismiss: () => void; className?: string; children: ReactNode }`. Non-modal `role="dialog"`, focuses itself, capture-phase Escape/ArrowRight/ArrowLeft/Enter, adds `.sb-tour-anchor` to the anchor while mounted.
 
@@ -771,11 +781,13 @@ git commit -m "feat(web): Coachmark primitive — anchored non-modal tour step"
 ### Task 4: `TourProvider` — auto-open, step engine, persistence, replay
 
 **Files:**
+
 - Create: `apps/web/src/features/tour/TourProvider.tsx`
 - Create: `apps/web/src/features/tour/index.ts`
 - Test (create): `apps/web/src/features/tour/TourProvider.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `tour.ts` (Task 2), `Coachmark` + `Modal` + `Button` from `../../ui/index.ts` (Task 3), `KbdCombo` from `../../keyboard/index.ts`, `useAuth` from `../../auth/AuthProvider.tsx`.
 - Produces: `export function TourProvider({ children }: { children: ReactNode }): JSX.Element`; `export function useTour(): { openTour: () => void }` (throws outside the provider). Barrel `features/tour/index.ts` re-exports both plus `TOUR_STEPS`, `TOUR_SUPPRESS_KEY`.
 
@@ -937,13 +949,7 @@ import { Button, Coachmark, Modal } from '../../ui/index.ts';
 import { KbdCombo } from '../../keyboard/index.ts';
 import { useAuth } from '../../auth/AuthProvider.tsx';
 import type { TourStep } from './tour.ts';
-import {
-  decideAutoOpen,
-  hasSeenTour,
-  isTourSuppressed,
-  markTourSeen,
-  TOUR_STEPS,
-} from './tour.ts';
+import { decideAutoOpen, hasSeenTour, isTourSuppressed, markTourSeen, TOUR_STEPS } from './tour.ts';
 
 /*
  * First-run guided tour (spec 2026-07-30-switchboard-self-serve-design.md).
@@ -1185,6 +1191,7 @@ git commit -m "feat(web): TourProvider — first-run auto-open, step engine, rep
 ### Task 5: Wire into the shell (suppress-seed first, then anchors + mount)
 
 **Files:**
+
 - Modify: `apps/web/src/test/setup.ts` (suite-wide suppression seed — do this FIRST)
 - Modify: `apps/web/src/app/LeftRail.tsx` (rail `data-tour` anchors)
 - Modify: `apps/web/src/app/TopBar.tsx:44` (search-form anchor)
@@ -1192,6 +1199,7 @@ git commit -m "feat(web): TourProvider — first-run auto-open, step engine, rep
 - Test (create): `apps/web/src/app/tourAnchors.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `TourProvider` from `../features/tour/index.ts` (Task 4).
 - Produces: DOM anchors `[data-tour="nav-inbox"]`, `[data-tour="nav-leads"]`, `[data-tour="nav-pipeline"]` (LeftRail links, derived `nav-${item.to.slice(1)}`) and `[data-tour="topbar-search"]` (TopBar search form) — the selectors `TOUR_STEPS` targets.
 
@@ -1280,11 +1288,11 @@ import { TourProvider } from '../features/tour/index.ts';
 and change the provider stack to:
 
 ```tsx
-              <AiProvider>
-                <TourProvider>
-                  <ShellChrome />
-                </TourProvider>
-              </AiProvider>
+<AiProvider>
+  <TourProvider>
+    <ShellChrome />
+  </TourProvider>
+</AiProvider>
 ```
 
 - [ ] **Step 5: Run the anchor test, the shell tests, and the a11y suite**
@@ -1304,10 +1312,12 @@ git commit -m "feat(web): mount first-run tour in the shell with data-tour ancho
 ### Task 6: Replay entry on Support & FAQs
 
 **Files:**
+
 - Modify: `apps/web/src/pages/HelpPage.tsx`
 - Test (create): `apps/web/src/pages/HelpPage.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `useTour` from `../features/tour/index.ts` (Task 4); `Page.actions` slot (`./Page.tsx`); `Button` from `../ui/index.ts`.
 
 - [ ] **Step 1: Write the failing test**
@@ -1392,10 +1402,12 @@ git commit -m "feat(web): replay the guided tour from Support & FAQs"
 ### Task 7: Leads "No leads yet" → Import leads CTA
 
 **Files:**
+
 - Modify: `apps/web/src/features/leads/components/LeadsSurface.tsx:252-265` (the EmptyState branch)
 - Test (modify): `apps/web/src/features/leads/components/LeadsSurface.test.tsx` (append one test to the `LeadsSurface — All leads` describe)
 
 **Interfaces:**
+
 - Consumes: existing `EmptyState.actions` slot; `Link` from `react-router-dom` (link-styled-as-button, `className="sb-btn"` — the `SequenceDetail.tsx:85` precedent).
 
 - [ ] **Step 1: Write the failing test**
@@ -1403,14 +1415,14 @@ git commit -m "feat(web): replay the guided tour from Support & FAQs"
 Append to the `describe('LeadsSurface — All leads', …)` block in `apps/web/src/features/leads/components/LeadsSurface.test.tsx`:
 
 ```tsx
-  test('true empty state offers the import path', async () => {
-    useReferenceHandlers();
-    server.use(http.get(api('/leads'), () => HttpResponse.json({ items: [] })));
-    renderAt('/leads');
-    await screen.findByText('No leads yet');
-    const cta = screen.getByRole('link', { name: 'Import leads' });
-    expect(cta).toHaveAttribute('href', '/import');
-  });
+test('true empty state offers the import path', async () => {
+  useReferenceHandlers();
+  server.use(http.get(api('/leads'), () => HttpResponse.json({ items: [] })));
+  renderAt('/leads');
+  await screen.findByText('No leads yet');
+  const cta = screen.getByRole('link', { name: 'Import leads' });
+  expect(cta).toHaveAttribute('href', '/import');
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1466,10 +1478,12 @@ git commit -m "feat(web): No-leads-yet empty state routes to the CSV import wiza
 ### Task 8: Sequences empty state → sequences primer CTA
 
 **Files:**
+
 - Modify: `apps/web/src/features/comms/components/SequencesList.tsx:102-106`
 - Test (modify): `apps/web/src/features/comms/components/sequences.test.tsx` (append one test to the `SequencesList` describe)
 
 **Interfaces:**
+
 - Consumes: `EmptyState.actions`; `Link` from `react-router-dom`. NOTE: the web app has **no sequence-create UI** — the CTA must not advertise one (spec §3); it routes to `/help`, whose FAQ documents sequence behavior.
 
 - [ ] **Step 1: Write the failing test**
@@ -1477,15 +1491,12 @@ git commit -m "feat(web): No-leads-yet empty state routes to the CSV import wiza
 Append inside `describe('SequencesList', …)` in `apps/web/src/features/comms/components/sequences.test.tsx`:
 
 ```tsx
-  test('empty state routes to the sequences primer on /help', async () => {
-    server.use(http.get(api('/sequences'), () => HttpResponse.json([])));
-    renderComms(<SequencesList />, '/sequences');
-    await screen.findByText('No sequences yet');
-    expect(screen.getByRole('link', { name: 'How sequences work' })).toHaveAttribute(
-      'href',
-      '/help',
-    );
-  });
+test('empty state routes to the sequences primer on /help', async () => {
+  server.use(http.get(api('/sequences'), () => HttpResponse.json([])));
+  renderComms(<SequencesList />, '/sequences');
+  await screen.findByText('No sequences yet');
+  expect(screen.getByRole('link', { name: 'How sequences work' })).toHaveAttribute('href', '/help');
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1542,11 +1553,13 @@ git commit -m "feat(web): sequences empty state routes to the /help primer"
 ### Task 9: E2E — guard existing specs, add `onboarding.spec.ts`
 
 **Files:**
+
 - Modify: `e2e/tests/auth.setup.ts` (ship suppression inside the shared storageState)
 - Modify: `e2e/tests/rep-loop.spec.ts` (fresh-profile spec: suppress before first goto)
 - Create: `e2e/tests/onboarding.spec.ts`
 
 **Interfaces:**
+
 - Consumes: `ADMIN_USER` from `e2e/tests/support/app`; the `test.use({ storageState: { cookies: [], origins: [] } })` fresh-profile pattern already used by `rep-loop.spec.ts:13`; dialog names produced by Tasks 3-5 (`Welcome to Switchboard`, `Inbox`, `Leads`, `Pipeline`, `Search & commands`, `That’s the board`) and buttons (`Start tour`, `Skip`, `Done`, `Replay the guided tour`).
 
 - [ ] **Step 1: Guard the existing suite**
@@ -1554,9 +1567,9 @@ git commit -m "feat(web): sequences empty state routes to the /help primer"
 In `e2e/tests/auth.setup.ts`, add as the first line of the setup body (before `await page.goto('/welcome')`):
 
 ```ts
-  // Authed specs never meet the first-run tour: the suppress key is set before
-  // any page load and is captured into the shared storageState.
-  await page.addInitScript(() => window.localStorage.setItem('sb-tour-suppress', '1'));
+// Authed specs never meet the first-run tour: the suppress key is set before
+// any page load and is captured into the shared storageState.
+await page.addInitScript(() => window.localStorage.setItem('sb-tour-suppress', '1'));
 ```
 
 In `e2e/tests/rep-loop.spec.ts`, directly under the existing `test.use({ storageState: { cookies: [], origins: [] } });` line, add:
@@ -1679,6 +1692,7 @@ git commit -m "test(e2e): first-run tour spec; suppress tour in pre-existing jou
 ### Task 10: Verification, live light/dark check, docs
 
 **Files:**
+
 - Modify: `DECISIONS.md` (append), `STATUS.md` (update)
 
 - [ ] **Step 1: Full gates (run each; all must be clean)**
@@ -1700,6 +1714,7 @@ pnpm --filter @switchboard/web dev
 ```
 
 In a real browser at the printed localhost URL:
+
 1. Open devtools → Application → clear localStorage for the origin. Dev-login as a fixture user → the Welcome card must appear over /inbox.
 2. Walk the tour end-to-end with only the keyboard (ArrowRight/ArrowLeft/Escape). Verify: coachmark ring sits on the rail item with no layout shift, step advance is instant, `g l` still navigates mid-tour, `?` still opens the cheat sheet after the tour.
 3. Toggle theme (topbar) and replay from /help → verify surface/border/ring colors in **both light and dark**.
