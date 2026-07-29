@@ -1,10 +1,10 @@
 /*
  * The landing page — "Operator Grid". A dense, high-contrast working surface;
  * chrome is achromatic and color is spent ONLY on state (the six lamps and the
- * vignette states). All colors/fonts resolve from welcome-tokens.css so both
- * themes and the re-skin merge hold automatically. The only choreography is the
- * hero board-ignition; the three acts get a simple scroll reveal; reply+live
- * lamps carry the single ambient pulse (dark only).
+ * vignette states). All colors/fonts resolve from the GLOBAL styles/tokens.css
+ * law + alias layers (the per-page welcome-tokens.css was merged and deleted).
+ * The only choreography is the hero board-ignition; the three acts get a simple
+ * scroll reveal; reply+live lamps carry the single ambient pulse (dark only).
  */
 
 /* ── Shell ─────────────────────────────────────────────────────────────────── */
@@ -17,6 +17,11 @@
   line-height: 1.5;
   /* Focus ring uses the law focus color inside this subtree. */
   --focus-ring: var(--focus);
+  /* Landing layout constants — poses, not law. --wc-row-h is intentionally
+   * FIXED (not var(--row-h)) so [data-density='comfortable'] never reflows
+   * the marketing wall. */
+  --wc-maxw: 1080px;
+  --wc-row-h: 36px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -34,7 +39,7 @@
   background: var(--panel-raised);
   color: var(--ink);
   border: 1px solid var(--line);
-  border-radius: var(--wc-r-control);
+  border-radius: var(--radius-1);
   transition: top 150ms var(--ease-out);
 }
 .sb-welcome__skip:focus-visible {
@@ -64,7 +69,7 @@
   background: var(--ink);
   color: var(--bg);
   border: 1px solid var(--ink);
-  border-radius: var(--wc-r-control);
+  border-radius: var(--radius-1);
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 16px;
@@ -127,7 +132,7 @@
   height: var(--wc-row-h);
   padding: 0 var(--space-4);
   border: 1px solid var(--line);
-  border-radius: var(--wc-r-control);
+  border-radius: var(--radius-1);
   color: var(--ink);
   font-size: 13px;
   font-weight: 500;
@@ -154,7 +159,7 @@
   height: var(--wc-row-h);
   padding: 0;
   border: 1px solid var(--line);
-  border-radius: var(--wc-r-control);
+  border-radius: var(--radius-1);
   background: transparent;
   color: var(--ink);
   cursor: pointer;
@@ -304,22 +309,22 @@
   color: var(--ink-dim);
 }
 .sb-welcome__lamp--reply {
-  color: var(--reply);
+  color: var(--state-reply);
 }
 .sb-welcome__lamp--overdue {
-  color: var(--overdue);
+  color: var(--state-overdue);
 }
 .sb-welcome__lamp--seq {
-  color: var(--seq);
+  color: var(--state-seq);
 }
 .sb-welcome__lamp--dnc {
-  color: var(--dnc);
+  color: var(--state-dnc);
 }
 .sb-welcome__lamp--live {
-  color: var(--live);
+  color: var(--state-live);
 }
 .sb-welcome__lamp--idle {
-  color: var(--idle);
+  color: var(--state-idle);
 }
 /* Glow (dark only, via --lamp-glow) + ambient pulse: reply + live ONLY. */
 .sb-welcome__lamp--reply .sb-welcome__lamp-dot,
@@ -469,17 +474,17 @@
   background: currentColor;
 }
 .sb-welcome__frame-dot--reply {
-  color: var(--reply);
+  color: var(--state-reply);
   box-shadow: var(--lamp-glow);
 }
 .sb-welcome__frame-dot--overdue {
-  color: var(--overdue);
+  color: var(--state-overdue);
 }
 .sb-welcome__frame-dot--seq {
-  color: var(--seq);
+  color: var(--state-seq);
 }
 .sb-welcome__frame-dot--idle {
-  color: var(--idle);
+  color: var(--state-idle);
 }
 .sb-welcome__frame-company {
   color: var(--ink);
@@ -740,7 +745,7 @@
 }
 .sb-welcome__trow.is-active {
   background: var(--panel-raised);
-  border-left-color: var(--reply);
+  border-left-color: var(--state-reply);
 }
 .sb-welcome__trow-main {
   display: flex;
@@ -833,7 +838,7 @@
   padding: var(--space-3);
   background: var(--panel-raised);
   border: 1px solid var(--line);
-  border-left: 2px solid var(--live);
+  border-left: 2px solid var(--state-live);
 }
 .sb-welcome__call-timer {
   font-size: 15px;
@@ -848,7 +853,7 @@
   color: var(--ink-dim);
 }
 .sb-welcome__call-consent svg {
-  color: var(--reply);
+  color: var(--state-reply);
 }
 .sb-welcome__call-rec {
   margin-left: auto;
@@ -858,14 +863,14 @@
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.1em;
-  color: var(--dnc);
+  color: var(--state-dnc);
 }
 .sb-welcome__call-rec::before {
   content: '';
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: var(--dnc);
+  background: var(--state-dnc);
 }
 
 /* Sequence vignette */
@@ -898,10 +903,10 @@
   background: var(--line);
 }
 .sb-welcome__seq-step.is-done {
-  background: var(--seq);
+  background: var(--state-seq);
 }
 .sb-welcome__seq-step.is-here {
-  background: var(--reply);
+  background: var(--state-reply);
 }
 .sb-welcome__seq-count {
   font-size: 11px;
@@ -914,7 +919,7 @@
   padding: var(--space-3);
   background: var(--panel-raised);
   border: 1px solid var(--line);
-  border-left: 2px solid var(--reply);
+  border-left: 2px solid var(--state-reply);
 }
 .sb-welcome__seq-quote {
   font-size: 13px;
@@ -932,9 +937,9 @@
   gap: var(--space-2);
   height: 22px;
   padding: 0 var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--reply) 45%, var(--line));
-  border-radius: var(--wc-r-control);
-  background: color-mix(in srgb, var(--reply) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--state-reply) 45%, var(--line));
+  border-radius: var(--radius-1);
+  background: color-mix(in srgb, var(--state-reply) 12%, transparent);
 }
 .sb-welcome__state-chip-word {
   font-size: 11px;
@@ -946,7 +951,7 @@
 .sb-welcome__state-chip-cause {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--reply);
+  color: var(--state-reply);
 }
 .sb-welcome__seq-note {
   font-size: 12px;
@@ -1039,7 +1044,7 @@
   background: var(--panel-raised);
   border: 1px solid var(--line);
   border-bottom-width: 2px;
-  border-radius: var(--wc-r-control);
+  border-radius: var(--radius-1);
   color: var(--ink);
   font-family: var(--font-mono);
   font-size: 11px;
