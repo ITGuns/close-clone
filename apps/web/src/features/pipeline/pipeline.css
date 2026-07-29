@@ -573,7 +573,7 @@
   font-variant-numeric: tabular-nums;
 }
 .pl-detail__date.is-overdue {
-  color: var(--overdue);
+  color: var(--state-overdue);
 }
 .pl-detail__overdue {
   font-size: var(--fs-micro);
