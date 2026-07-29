@@ -419,7 +419,8 @@
   }
   .sb-tooltip,
   .sb-menu,
-  .sb-combobox__panel {
+  .sb-combobox__panel,
+  .sb-coachmark {
     animation: none;
   }
   /* Drawer: keep the opacity fade (comprehension), drop the slide (movement). */
@@ -525,4 +526,76 @@
 }
 .sb-combobox__empty {
   justify-content: flex-start;
+}
+
+/* ── Coachmark (guided-tour step — ui/Coachmark.tsx) ───────────────────── */
+.sb-coachmark {
+  z-index: var(--z-toast);
+  width: 300px;
+  padding: var(--space-4) var(--space-5);
+  background: var(--surface-2);
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-2);
+  color: var(--ink-0);
+  font-size: var(--fs-sm);
+  animation: sb-coachmark-in var(--dur) var(--ease-out);
+}
+.sb-coachmark:focus {
+  outline: none; /* programmatic dialog focus; controls keep visible rings */
+}
+/* Keyboard advances are 0ms — the tour passes instant on every step (D-T7). */
+.sb-coachmark[data-instant] {
+  animation: none;
+}
+.sb-coachmark[data-side='right'] {
+  transform-origin: left center;
+}
+.sb-coachmark[data-side='left'] {
+  transform-origin: right center;
+}
+.sb-coachmark[data-side='top'] {
+  transform-origin: center bottom;
+}
+.sb-coachmark[data-side='bottom'] {
+  transform-origin: center top;
+}
+.sb-coachmark__step {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--fs-micro);
+  font-variant-numeric: tabular-nums;
+}
+.sb-coachmark__title {
+  margin: var(--space-1) 0;
+  font-size: var(--fs-md);
+  font-weight: var(--fw-semibold);
+}
+.sb-coachmark__body {
+  color: var(--ink-2);
+}
+.sb-coachmark__body p {
+  margin: 0;
+}
+.sb-coachmark__combo {
+  margin-top: var(--space-2);
+}
+.sb-coachmark__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+@keyframes sb-coachmark-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+/* Active tour anchor: focus-token ring, zero layout shift (D-T5). */
+.sb-tour-anchor {
+  border-radius: var(--radius-1);
+  box-shadow:
+    0 0 0 2px var(--surface-1),
+    0 0 0 4px var(--focus);
 }
