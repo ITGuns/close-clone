@@ -1,5 +1,11 @@
 # STATUS — Switchboard build
 
+## SELF-SERVE ONBOARDING + GUIDED TOUR (2026-07-30, D-064 · CONTRACTS unchanged)
+
+Shipped a first-run guided tour and real empty-state CTAs — all client-only, **zero CONTRACTS/API/auth change** and zero new dependencies. A `TourProvider` mounted in `AppShell` auto-opens once per user (localStorage `sb-tour-v1:<userId>`, kill switch `sb-tour-suppress`), rendering `Modal` bookends and a new non-modal `Coachmark` primitive (built on an extended `ui/floating.ts` with left/right sides) anchored to `data-tour` attributes on the LeftRail/TopBar. Six steps, keyboard-first (Arrow/Enter advance, Escape dismisses, 0ms instant advances, reduced-motion honored), dismissible + replayable from **Support & FAQs**. Empty states got honest CTAs: Leads → the CSV import wizard, Sequences → the `/help` primer (no create-UI exists, so no fake CTA). The suppress kill switch is seeded in `src/test/setup.ts` + `e2e/tests/auth.setup.ts` + `rep-loop.spec.ts`, so none of the ~2,600 pre-existing tests ever meets the tour.
+
+**Verification:** web typecheck · lint · **1,444 tests** · build · `format:check` all clean; the new `e2e/tests/onboarding.spec.ts` passes in real Chromium (mock mode) — auto-open, keyboard advance/retreat, Escape dismissal, reload-persistence, and replay-to-completion. Light/dark + `prefers-reduced-motion` remain a manual visual check (the coachmark uses existing tokens and the shared reduced-motion block).
+
 ## DEMO → DEPLOYMENT (2026-07-29, D-061/D-062 · CONTRACTS v1.3.6)
 
 Three parallel audits — provider wiring, deploy readiness, Gmail/auth — turned up a single recurring defect: **code that is written, tested, and never actually connected in the artifact you deploy.** Five instances, all invisible to ~4,000 green tests, because every layer mocks the one beneath it and every historical "verified against the real API" check was pointed at `dev/boot.ts` rather than `main.ts`.
