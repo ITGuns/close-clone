@@ -41,20 +41,20 @@ All commands run from `D:/CODE/NEW/close-clone/apps/web` (or repo root with `pnp
 
 ## File Structure
 
-| File | Responsibility in this slice |
-| --- | --- |
-| `apps/web/src/styles/tokens.css` | +`--fs-display-xl`/`--fs-display-2xl` (type scale), +`--dur-ignition` (motion), +`--glow-hero-alpha` in all four LAW blocks, +`--glow-hero` in the ALIAS layer |
-| `apps/web/src/styles/tokens.test.ts` | **New** — law test pinning the Signal Bloom token additions (file-content assertions; Vitest runs with `css: false`, so CSS is asserted as text) |
-| `apps/web/src/features/welcome/welcome-tokens.css` | **Deleted** (merge-dedup — global tokens now carry identical law values) |
-| `apps/web/src/features/welcome/welcome.css` | Migrated to global law token names; status wall, bloom, display steps, retimed ignition |
-| `apps/web/src/features/welcome/welcomeCss.test.ts` | **New** — guards the dedup (no legacy token names, no literal delays, bloom/ignition wired to tokens) |
-| `apps/web/src/features/welcome/fixtures.ts` | +`WallRow` + `WALL_ROWS` (12 deterministic rows, all six states) |
-| `apps/web/src/features/welcome/fixtures.test.ts` | **New** — wall dataset invariants |
-| `apps/web/src/features/welcome/HeroFrame.tsx` | Tilted frame → full-bleed status wall (still decorative, still zero `<img>`) |
-| `apps/web/src/features/welcome/Hero.tsx` | +bloom layer div |
-| `apps/web/src/features/welcome/copy.ts` | +`WALL` copy, hero sub rewritten to explain the lamp language |
-| `apps/web/src/features/welcome/WelcomePage.tsx` | Drop the `welcome-tokens.css` import |
-| `apps/web/src/features/welcome/WelcomePage.test.tsx` | Extended: wall assertions, bloom assertion, new copy assertion; zero-`<img>` assertions untouched |
+| File                                                 | Responsibility in this slice                                                                                                                                   |
+| ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/web/src/styles/tokens.css`                     | +`--fs-display-xl`/`--fs-display-2xl` (type scale), +`--dur-ignition` (motion), +`--glow-hero-alpha` in all four LAW blocks, +`--glow-hero` in the ALIAS layer |
+| `apps/web/src/styles/tokens.test.ts`                 | **New** — law test pinning the Signal Bloom token additions (file-content assertions; Vitest runs with `css: false`, so CSS is asserted as text)               |
+| `apps/web/src/features/welcome/welcome-tokens.css`   | **Deleted** (merge-dedup — global tokens now carry identical law values)                                                                                       |
+| `apps/web/src/features/welcome/welcome.css`          | Migrated to global law token names; status wall, bloom, display steps, retimed ignition                                                                        |
+| `apps/web/src/features/welcome/welcomeCss.test.ts`   | **New** — guards the dedup (no legacy token names, no literal delays, bloom/ignition wired to tokens)                                                          |
+| `apps/web/src/features/welcome/fixtures.ts`          | +`WallRow` + `WALL_ROWS` (12 deterministic rows, all six states)                                                                                               |
+| `apps/web/src/features/welcome/fixtures.test.ts`     | **New** — wall dataset invariants                                                                                                                              |
+| `apps/web/src/features/welcome/HeroFrame.tsx`        | Tilted frame → full-bleed status wall (still decorative, still zero `<img>`)                                                                                   |
+| `apps/web/src/features/welcome/Hero.tsx`             | +bloom layer div                                                                                                                                               |
+| `apps/web/src/features/welcome/copy.ts`              | +`WALL` copy, hero sub rewritten to explain the lamp language                                                                                                  |
+| `apps/web/src/features/welcome/WelcomePage.tsx`      | Drop the `welcome-tokens.css` import                                                                                                                           |
+| `apps/web/src/features/welcome/WelcomePage.test.tsx` | Extended: wall assertions, bloom assertion, new copy assertion; zero-`<img>` assertions untouched                                                              |
 
 Not touched: `useIgnition.ts` (the hook already gates everything; all retiming is CSS), `useReveal.ts`, `StateLamp.tsx` (markup unchanged; its CSS re-points to law names in Task 2), everything in `apps/web/src/ui/`.
 
@@ -63,10 +63,12 @@ Not touched: `useIgnition.ts` (the hook already gates everything; all retiming i
 ### Task 1: Signal Bloom tokens (LAW + ALIAS additions to `tokens.css`)
 
 **Files:**
+
 - Create: `apps/web/src/styles/tokens.test.ts`
 - Modify: `apps/web/src/styles/tokens.css` (typography block ~line 80, motion block ~line 137, the four palette blocks at lines ~187/273/317/359, ALIAS layer ~line 215)
 
 **Interfaces:**
+
 - Consumes: existing law tokens `--state-live`, the four theme blocks (`:root`, `@media (prefers-color-scheme: light)`, `:root[data-theme='dark']`, `:root[data-theme='light']`), the ALIAS layer in `:root`.
 - Produces: `--fs-display-xl: 56px`, `--fs-display-2xl: 72px`, `--dur-ignition: 640ms`, `--glow-hero-alpha` (per-theme raw %), `--glow-hero` (alias, a radial-gradient composed from `var(--state-live)` + `var(--glow-hero-alpha)`). Tasks 4–5 read these via `var()` in `welcome.css`.
 
@@ -124,41 +126,41 @@ Four edits to `apps/web/src/styles/tokens.css`:
 (a) Typography block — after `--fs-display-lg: 44px;`:
 
 ```css
-  --fs-display-lg: 44px;
-  --fs-display-xl: 56px; /* landing display step (Signal Bloom) */
-  --fs-display-2xl: 72px; /* landing hero headline ceiling (Signal Bloom) */
+--fs-display-lg: 44px;
+--fs-display-xl: 56px; /* landing display step (Signal Bloom) */
+--fs-display-2xl: 72px; /* landing hero headline ceiling (Signal Bloom) */
 ```
 
 (b) Motion block — after `--dur-press: 130ms; /* press affordance (scale 0.97) */`:
 
 ```css
-  --dur-ignition: 640ms; /* hero board ignition total — law window 500–800ms, once per session */
+--dur-ignition: 640ms; /* hero board ignition total — law window 500–800ms, once per session */
 ```
 
 (c) LAW blocks — add one line to each of the **four** palette blocks, next to each block's `--lamp-glow` line. Dark blocks (bare `:root` and `:root[data-theme='dark']`):
 
 ```css
-  --lamp-glow: 0 0 8px currentColor;
-  --glow-hero-alpha: 16%; /* hero bloom strength — dark carries the wash */
+--lamp-glow: 0 0 8px currentColor;
+--glow-hero-alpha: 16%; /* hero bloom strength — dark carries the wash */
 ```
 
 Light blocks (`@media (prefers-color-scheme: light)` `:root` and `:root[data-theme='light']`):
 
 ```css
-  --lamp-glow: none; /* light theme prints solid dots — no glow */
-  --glow-hero-alpha: 4%; /* hero bloom near-off in light (mirrors the lamp-glow rule) */
+--lamp-glow: none; /* light theme prints solid dots — no glow */
+--glow-hero-alpha: 4%; /* hero bloom near-off in light (mirrors the lamp-glow rule) */
 ```
 
 (d) ALIAS layer — after `--selection-bg: var(--selection);` in the `:root` alias section:
 
 ```css
-  /* Hero bloom (Signal Bloom): a low-alpha radial wash of the LIVE cyan behind
+/* Hero bloom (Signal Bloom): a low-alpha radial wash of the LIVE cyan behind
    * the landing headline. Derived — never a new hue; strength is per-theme LAW. */
-  --glow-hero: radial-gradient(
-    58% 44% at 50% 28%,
-    color-mix(in srgb, var(--state-live) var(--glow-hero-alpha), transparent),
-    transparent 72%
-  );
+--glow-hero: radial-gradient(
+  58% 44% at 50% 28%,
+  color-mix(in srgb, var(--state-live) var(--glow-hero-alpha), transparent),
+  transparent 72%
+);
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -185,11 +187,13 @@ git commit -m "feat(web): add Signal Bloom tokens — 56/72px display steps, --d
 The file's own header flags this merge-dedup: it exists only because the landing shipped before the global re-skin. The global `tokens.css` now carries identical law values under the law names (`--bg`, `--panel`, `--line`, `--ink`, `--ink-dim`, `--focus`, `--lamp-glow`, `--ease-out`, `--ease-in-out`, `--font-*`), but under **`--state-reply`**-style names — `welcome.css` still reads the short names (`--reply`, `--seq`, …) plus three `--wc-*` locals. Migrate the names, keep the two layout constants locally, delete the file.
 
 **Files:**
+
 - Create: `apps/web/src/features/welcome/welcomeCss.test.ts`
 - Modify: `apps/web/src/features/welcome/welcome.css` (token-name migration; whole file affected), `apps/web/src/features/welcome/WelcomePage.tsx:9` (drop the import)
 - Delete: `apps/web/src/features/welcome/welcome-tokens.css`
 
 **Interfaces:**
+
 - Consumes: global law tokens from Task 1's file (`--state-reply`, `--state-overdue`, `--state-seq`, `--state-dnc`, `--state-live`, `--state-idle`, `--radius-1`, `--lamp-glow`, `--font-*`, `--ease-*`).
 - Produces: `welcome.css` reads **only** global law names + two landing-local layout constants scoped on `.sb-welcome` (`--wc-maxw: 1080px`, `--wc-row-h: 36px` — layout poses, not law; deliberately NOT `var(--row-h)` so the comfortable-density override never reflows the landing). Tasks 4–5 write new CSS against these same names.
 
@@ -244,15 +248,15 @@ Expected: FAIL — `welcome-tokens.css` exists; `var(--reply)` etc. found in `we
 
 In `apps/web/src/features/welcome/welcome.css`, apply these exact string replacements (replace-all; the class names like `.sb-welcome__seq` contain no `var(` and are untouched):
 
-| Old (from welcome-tokens.css) | New (global law) |
-| --- | --- |
-| `var(--reply)` | `var(--state-reply)` |
-| `var(--overdue)` | `var(--state-overdue)` |
-| `var(--seq)` | `var(--state-seq)` |
-| `var(--dnc)` | `var(--state-dnc)` |
-| `var(--live)` | `var(--state-live)` |
-| `var(--idle)` | `var(--state-idle)` |
-| `var(--wc-r-control)` | `var(--radius-1)` |
+| Old (from welcome-tokens.css) | New (global law)       |
+| ----------------------------- | ---------------------- |
+| `var(--reply)`                | `var(--state-reply)`   |
+| `var(--overdue)`              | `var(--state-overdue)` |
+| `var(--seq)`                  | `var(--state-seq)`     |
+| `var(--dnc)`                  | `var(--state-dnc)`     |
+| `var(--live)`                 | `var(--state-live)`    |
+| `var(--idle)`                 | `var(--state-idle)`    |
+| `var(--wc-r-control)`         | `var(--radius-1)`      |
 
 Then define the two remaining `--wc-*` locals in the existing `.sb-welcome` rule (they are landing layout constants, not law), and fix the stale header comment:
 
@@ -324,10 +328,12 @@ git commit -m "refactor(web): merge-dedup welcome-tokens.css into global law tok
 ### Task 3: Status-wall fixtures (`WALL_ROWS` — 12 deterministic rows, all six states)
 
 **Files:**
+
 - Modify: `apps/web/src/features/welcome/fixtures.ts` (append after `TRIAGE_ROWS`, ~line 86)
 - Create: `apps/web/src/features/welcome/fixtures.test.ts`
 
 **Interfaces:**
+
 - Consumes: existing `StateKey` union and `HERO_LAMPS` from `fixtures.ts`.
 - Produces: `interface WallRow { id: string; company: string; person: string; line: string; state: StateKey; stateWord: string; time: string }` and `export const WALL_ROWS: readonly WallRow[]` (length 12, unique ids, covers all six states, first row is Northwind Labs). Task 4's `HeroFrame.tsx` maps over `WALL_ROWS`.
 
@@ -517,10 +523,12 @@ git commit -m "feat(web): add WALL_ROWS status-wall fixtures — 12 deterministi
 The perspective-tilted 5-row frame becomes Signal Bloom's centerpiece: a full-bleed, flat, 12-row status wall. The wall stays **decorative** (`aria-hidden` on the wrap — the feature acts narrate the same rows for AT, and the six lamp words already render accessibly in the hero lamp rail), all live DOM, zero `<img>`. The `WALL` copy strings land in `copy.ts` here because the component consumes them.
 
 **Files:**
+
 - Modify: `apps/web/src/features/welcome/HeroFrame.tsx` (full rewrite of the JSX body), `apps/web/src/features/welcome/copy.ts` (append `WALL`), `apps/web/src/features/welcome/welcome.css` (replace the frame-wrap/tilt block ~lines 395–414 and the frame-wrap ignition rule ~lines 611–621; add wall rules + two dot modifiers), `apps/web/src/features/welcome/WelcomePage.test.tsx:97-105` (frame test → wall test)
 - Test: `apps/web/src/features/welcome/WelcomePage.test.tsx`
 
 **Interfaces:**
+
 - Consumes: `WALL_ROWS`/`WallRow` (Task 3), `WORDMARK` from `copy.ts`, `BoardMark` from `./icons.tsx`, law tokens per Task 2 names.
 - Produces: DOM contract for CSS/tests — `.sb-welcome__wall-wrap[aria-hidden] > .sb-welcome__wall > (.sb-welcome__wall-bar + ul.sb-welcome__wall-rows > li.sb-welcome__wall-row × 12)`; each row sets `--row-i` (0-based) for the Task 5 ignition stagger; cell classes reuse the existing `sb-welcome__frame-dot/-company/-line/-state/-time` styles. `export const WALL = { crumb: 'Live board · 12 on deck', kbd: 'J / K' } as const` in `copy.ts`.
 
@@ -529,19 +537,19 @@ The perspective-tilted 5-row frame becomes Signal Bloom's centerpiece: a full-bl
 In `apps/web/src/features/welcome/WelcomePage.test.tsx`, replace the test at lines 97–105 (`'the hero product frame is live DOM, decorative, and shows the triage rows'`) with — assertions strictly extended: same decorative + zero-img checks, row count 5 → 12, plus six-state coverage:
 
 ```tsx
-  test('the hero status wall is live DOM, decorative, and shows twelve six-state rows', () => {
-    const { container } = renderWelcome();
-    const wall = container.querySelector('.sb-welcome__wall-wrap');
-    expect(wall).not.toBeNull();
-    expect(wall).toHaveAttribute('aria-hidden', 'true');
-    expect(wall?.querySelectorAll('.sb-welcome__wall-row')).toHaveLength(12);
-    expect(wall?.textContent).toContain('Northwind Labs');
-    // The wall wears the whole color budget: all six state dots present.
-    for (const state of ['reply', 'overdue', 'seq', 'dnc', 'live', 'idle']) {
-      expect(wall?.querySelector(`.sb-welcome__frame-dot--${state}`)).not.toBeNull();
-    }
-    expect(wall?.querySelector('img')).toBeNull();
-  });
+test('the hero status wall is live DOM, decorative, and shows twelve six-state rows', () => {
+  const { container } = renderWelcome();
+  const wall = container.querySelector('.sb-welcome__wall-wrap');
+  expect(wall).not.toBeNull();
+  expect(wall).toHaveAttribute('aria-hidden', 'true');
+  expect(wall?.querySelectorAll('.sb-welcome__wall-row')).toHaveLength(12);
+  expect(wall?.textContent).toContain('Northwind Labs');
+  // The wall wears the whole color budget: all six state dots present.
+  for (const state of ['reply', 'overdue', 'seq', 'dnc', 'live', 'idle']) {
+    expect(wall?.querySelector(`.sb-welcome__frame-dot--${state}`)).not.toBeNull();
+  }
+  expect(wall?.querySelector('img')).toBeNull();
+});
 ```
 
 Also update the describe title on line 70 to `'WelcomePage — hero wall + nav menu + accounts band'`.
@@ -679,6 +687,7 @@ Extend the dot modifiers (next to the existing four) so the wall can wear all si
 ```
 
 Update the two `.sb-welcome__frame-*` responsive/ignition selectors that referenced the old wrap:
+
 - In `@media (max-width: 560px)` replace `.sb-welcome__frame-row { grid-template-columns: … }` with `.sb-welcome__wall-row { grid-template-columns: 9px minmax(0, 1fr) auto auto; }` (the `.sb-welcome__frame-line { display: none; }` rule stays as-is — the wall reuses that cell class).
 - In the ignition block replace the `.sb-welcome__frame-wrap` rule's selector with `.sb-welcome__hero[data-ignite='igniting'] .sb-welcome__wall-wrap` (timing itself is retuned in Task 5).
 - In the reduced-motion block, `.sb-welcome__frame-dot--reply { box-shadow: var(--lamp-glow); }` stays (glow is static; the wall reuses the class).
@@ -705,10 +714,12 @@ git commit -m "feat(web): hero status wall — full-bleed 12-row live-DOM board 
 ### Task 5: Bloom wash, 56/72px display steps, ignition retimed on `--dur-ignition`
 
 **Files:**
+
 - Modify: `apps/web/src/features/welcome/Hero.tsx` (~line 21, add the bloom layer), `apps/web/src/features/welcome/welcome.css` (headline sizes; the whole `data-ignite='igniting'` block), `apps/web/src/features/welcome/welcomeCss.test.ts` (extend), `apps/web/src/features/welcome/WelcomePage.test.tsx` (extend)
 - Test: both test files above
 
 **Interfaces:**
+
 - Consumes: `--glow-hero`, `--dur-ignition`, `--fs-display`, `--fs-display-lg`, `--fs-display-xl`, `--fs-display-2xl` (Task 1); `.sb-welcome__wall-row` + `--row-i` (Task 4); `data-ignite` from `useIgnition.ts` (unchanged — `'lit'` under reduced motion means the `@starting-style` transitions never arm, so reduced motion still collapses the entrance entirely).
 - Produces: `.sb-welcome__hero-bloom` decorative div; all ignition delays as `calc(var(--dur-ignition) * fraction)`.
 
@@ -717,28 +728,28 @@ git commit -m "feat(web): hero status wall — full-bleed 12-row live-DOM board 
 (a) Add to the `'WelcomePage — hero wall + nav menu + accounts band'` describe in `WelcomePage.test.tsx`:
 
 ```tsx
-  test('the hero bloom wash exists and is decorative (cyan derived, CSS-owned)', () => {
-    const { container } = renderWelcome();
-    const bloom = container.querySelector('.sb-welcome__hero-bloom');
-    expect(bloom).not.toBeNull();
-    expect(bloom).toHaveAttribute('aria-hidden', 'true');
-  });
+test('the hero bloom wash exists and is decorative (cyan derived, CSS-owned)', () => {
+  const { container } = renderWelcome();
+  const bloom = container.querySelector('.sb-welcome__hero-bloom');
+  expect(bloom).not.toBeNull();
+  expect(bloom).toHaveAttribute('aria-hidden', 'true');
+});
 ```
 
 (b) Add to `welcomeCss.test.ts`:
 
 ```ts
-  test('bloom + ignition are token-driven: --glow-hero paints, --dur-ignition times', () => {
-    expect(css).toContain('var(--glow-hero)');
-    expect(css).toContain('var(--dur-ignition)');
-    // Every choreography delay derives from the one token — no literal-first delays.
-    expect(css).not.toMatch(/transition-delay:\s*\d+ms/);
-  });
+test('bloom + ignition are token-driven: --glow-hero paints, --dur-ignition times', () => {
+  expect(css).toContain('var(--glow-hero)');
+  expect(css).toContain('var(--dur-ignition)');
+  // Every choreography delay derives from the one token — no literal-first delays.
+  expect(css).not.toMatch(/transition-delay:\s*\d+ms/);
+});
 
-  test('headline reads the new display steps (56/72px used only here)', () => {
-    expect(css).toMatch(/__headline[^}]*var\(--fs-display-2xl\)/);
-    expect(css).toMatch(/var\(--fs-display-xl\)/);
-  });
+test('headline reads the new display steps (56/72px used only here)', () => {
+  expect(css).toMatch(/__headline[^}]*var\(--fs-display-2xl\)/);
+  expect(css).toMatch(/var\(--fs-display-xl\)/);
+});
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -900,10 +911,12 @@ git commit -m "feat(web): Signal Bloom hero — cyan bloom wash, 56/72px display
 Plain, honest register; the copy explains the lamp language instead of decorating around it. The headline (`'Pick up the line.' / 'The rest is already dialed.'`) already carries the voice and is pinned by tests — keep it. Rewrite the sub so the state words appear as themselves; keep the phrase `one keystroke away` so the existing assertion at `WelcomePage.test.tsx:120` keeps passing untouched.
 
 **Files:**
+
 - Modify: `apps/web/src/features/welcome/copy.ts:44-48` (`HERO.sub`)
 - Test: `apps/web/src/features/welcome/WelcomePage.test.tsx` (extend the `'renders at /welcome…'` test)
 
 **Interfaces:**
+
 - Consumes: `HERO` shape (`headline`/`sub`/`cta`) — unchanged; `Hero.tsx` keeps rendering `{HERO.sub}`.
 - Produces: new `HERO.sub` string (below). No shape changes.
 
@@ -912,7 +925,7 @@ Plain, honest register; the copy explains the lamp language instead of decoratin
 In the `'renders at /welcome with the headline, sub, and stat readout'` test (line 117), add after the existing `/one keystroke away/i` assertion:
 
 ```tsx
-    expect(screen.getByText(/wears a state lamp/i)).toBeInTheDocument();
+expect(screen.getByText(/wears a state lamp/i)).toBeInTheDocument();
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -949,6 +962,7 @@ git commit -m "copy(web): hero sub explains the lamp language — state words as
 ### Task 7: Verification — full gates, real browser (both themes × both densities, mobile + desktop, reduced motion), motion audit
 
 **Files:**
+
 - No source changes expected. Fix-forward anything found (each fix follows its owning task's TDD loop), then re-run this task from the top.
 
 - [ ] **Step 1: Full test suite**
@@ -983,6 +997,7 @@ For each of dark/light (DevTools → Rendering → emulate `prefers-color-scheme
 - [ ] **Step 5: Mobile + desktop viewport check**
 
 DevTools device toolbar: **375×812** (mobile) and **1280×800** (desktop):
+
 - Mobile: wall rows collapse to the 4-column grid (`9px | company | state | time`, message line hidden); nav collapses to the menu toggle; headline wraps without overflow; no horizontal scrollbar (the `margin-inline: calc(50% - 50vw)` full-bleed must not leak x-overflow — if it does, add `overflow-x: clip` to `.sb-welcome__hero` which already has `overflow: hidden`).
 - Desktop: one `<h1>`; sections in order Nav → Hero → AccountsBand → FeatureActs → KeyboardStrip → TrustLine → FooterCta.
 
@@ -997,23 +1012,26 @@ In each theme, in the console:
 
 ```js
 const s = getComputedStyle(document.querySelector('.sb-welcome'));
-['--state-reply', '--state-live', '--bg', '--panel', '--line', '--ink', '--lamp-glow'].map((t) => [t, s.getPropertyValue(t).trim()]);
+['--state-reply', '--state-live', '--bg', '--panel', '--line', '--ink', '--lamp-glow'].map((t) => [
+  t,
+  s.getPropertyValue(t).trim(),
+]);
 ```
 
 Expected: exact law values from `tokens.css` (dark: `#2ee6a8`, `#56c8ff`, `#141719`, `#1b1f23`, `#30363c`, `#e8ebec`, `0 0 8px currentColor`; light: `#0e7a57`, `#0b7fc4`, `#ecedeb`, `#f7f7f5`, `#d4d6d3`, `#1b1e20`, `none`). Compare the rendered page side-by-side against the `main` branch build (`git stash` or a second checkout) — `/welcome` must render identically apart from the intended Signal Bloom changes.
 
 - [ ] **Step 8: Motion audit table (attach to the PR)**
 
-| Where | Before | After | Rule |
-| --- | --- | --- | --- |
-| Hero grid fade | 260ms fixed | `calc(--dur-ignition * 0.4)` = 256ms opacity | DESIGN.md §5 — ignition budget, opacity only |
-| Hero bloom | — (new) | `calc(--dur-ignition * 0.5)` = 320ms opacity, no delay | one signature entrance; opacity only |
-| Lamp stagger | `120ms + i×46ms` fixed | `calc(--dur-ignition * 0.19) + i×46ms` | transform+opacity; ≤800ms total |
-| Headline / sub / CTA / stats | fixed 400/470/520/560ms delays | `--dur-ignition` × 0.62/0.73/0.81/0.88 | single token tunes the choreography |
-| Frame surface → wall sweep | 220ms fade @580ms | wrap fade @0.5×, rows 200ms @0.55× + i×18ms (last lands 750ms) | ≤800ms; transform+opacity |
-| Ambient lamp pulse | 2.2s opacity pulse (reply/live) | unchanged | the only ambient motion; suspended under reduced motion |
-| Act scroll reveal | 300ms opacity/translate | unchanged | `useReveal` stays minimal |
-| Reduced motion | entrance collapsed via `data-ignite='lit'` | unchanged mechanism, covers bloom + wall too | `prefers-reduced-motion` collapses the entrance entirely |
+| Where                        | Before                                     | After                                                          | Rule                                                     |
+| ---------------------------- | ------------------------------------------ | -------------------------------------------------------------- | -------------------------------------------------------- |
+| Hero grid fade               | 260ms fixed                                | `calc(--dur-ignition * 0.4)` = 256ms opacity                   | DESIGN.md §5 — ignition budget, opacity only             |
+| Hero bloom                   | — (new)                                    | `calc(--dur-ignition * 0.5)` = 320ms opacity, no delay         | one signature entrance; opacity only                     |
+| Lamp stagger                 | `120ms + i×46ms` fixed                     | `calc(--dur-ignition * 0.19) + i×46ms`                         | transform+opacity; ≤800ms total                          |
+| Headline / sub / CTA / stats | fixed 400/470/520/560ms delays             | `--dur-ignition` × 0.62/0.73/0.81/0.88                         | single token tunes the choreography                      |
+| Frame surface → wall sweep   | 220ms fade @580ms                          | wrap fade @0.5×, rows 200ms @0.55× + i×18ms (last lands 750ms) | ≤800ms; transform+opacity                                |
+| Ambient lamp pulse           | 2.2s opacity pulse (reply/live)            | unchanged                                                      | the only ambient motion; suspended under reduced motion  |
+| Act scroll reveal            | 300ms opacity/translate                    | unchanged                                                      | `useReveal` stays minimal                                |
+| Reduced motion               | entrance collapsed via `data-ignite='lit'` | unchanged mechanism, covers bloom + wall too                   | `prefers-reduced-motion` collapses the entrance entirely |
 
 - [ ] **Step 9: Final commit**
 

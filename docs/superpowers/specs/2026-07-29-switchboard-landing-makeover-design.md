@@ -24,11 +24,11 @@ color budget and motion law. App-surface polish is deferred (see Roadmap).
 
 ### Visual directions (human picks one; B is the recommended default)
 
-| | Name | Character (color / type / hero) | Risk |
-|---|---|---|---|
-| A | **Burnished Console** | Zero new values — same palette and faces; hero ignition re-choreographed as a staged left-to-right lamp cascade, display numerals promoted one step, deeper surface layering using existing `--panel-*` tokens only. | low |
-| B | **Signal Bloom** *(recommended)* | Chrome stays achromatic, but the six state tokens become the landing's expressive layer: hero becomes a full-bleed live "status wall" built from `fixtures.ts` rows, the single cyan gains a low-alpha radial wash behind the headline (derived from `--state-live`, no new hue), and IBM Plex Sans Condensed 700 gains 56/72px display steps. | medium |
-| C | **Phosphor Shift** | Dark-first CRT register: JetBrains Mono promoted to the hero headline, `--etch-size` grid texture surfaced in the hero, reply/live glow amplified in dark, light theme gets a brushed-metal specular treatment. | medium-high |
+|     | Name                             | Character (color / type / hero)                                                                                                                                                                                                                                                                                                                | Risk        |
+| --- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| A   | **Burnished Console**            | Zero new values — same palette and faces; hero ignition re-choreographed as a staged left-to-right lamp cascade, display numerals promoted one step, deeper surface layering using existing `--panel-*` tokens only.                                                                                                                           | low         |
+| B   | **Signal Bloom** _(recommended)_ | Chrome stays achromatic, but the six state tokens become the landing's expressive layer: hero becomes a full-bleed live "status wall" built from `fixtures.ts` rows, the single cyan gains a low-alpha radial wash behind the headline (derived from `--state-live`, no new hue), and IBM Plex Sans Condensed 700 gains 56/72px display steps. | medium      |
+| C   | **Phosphor Shift**               | Dark-first CRT register: JetBrains Mono promoted to the hero headline, `--etch-size` grid texture surfaced in the hero, reply/live glow amplified in dark, light theme gets a brushed-metal specular treatment.                                                                                                                                | medium-high |
 
 Why B is the default: it modernizes the hero and adds typographic scale
 without introducing a single new hue — the "color is information" contract and
@@ -186,7 +186,7 @@ components. Register: plain, honest, explain-like-I'm-5.
 - **AA contrast** on both themes for every new/edited pair; the light-theme
   state values (`#0e7a57`, `#8f5b00`, `#5a3ea6`, `#b01e33`, `#0b7fc4`) were
   darkened for AA — do not lighten them. Any new alpha wash must keep the text
-  above it at AA against the *composited* result.
+  above it at AA against the _composited_ result.
 - **One `<h1>`** on the page (the hero headline); sections use `<h2>`.
 - **Reduced motion:** all new motion sits behind
   `prefers-reduced-motion: reduce` blocks like the existing ones in
