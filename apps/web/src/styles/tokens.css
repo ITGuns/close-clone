@@ -78,6 +78,8 @@
   --fs-display-sm: 24px;
   --fs-display: 32px;
   --fs-display-lg: 44px;
+  --fs-display-xl: 56px; /* landing display step (Signal Bloom) */
+  --fs-display-2xl: 72px; /* landing hero headline ceiling (Signal Bloom) */
 
   --lh-tight: 1.15;
   --lh-base: 1.45;
@@ -134,6 +136,7 @@
   --dur-tooltip: 140ms; /* tooltip entrance (law floor: 125ms) */
   --dur: 180ms; /* dropdowns / popovers */
   --dur-press: 130ms; /* press affordance (scale 0.97) */
+  --dur-ignition: 640ms; /* hero board ignition total — law window 500–800ms, once per session */
   --lamp-pulse-dur: 2.2s; /* the only ambient motion */
 
   /* ── Etched grid texture — landing hero + board headers ONLY (44px cell) ─── */
@@ -185,6 +188,7 @@
   --state-draft-bg: #2e2410;
 
   --lamp-glow: 0 0 8px currentColor; /* reply + live lamps, dark only */
+  --glow-hero-alpha: 16%; /* hero bloom strength — dark carries the wash */
 
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-2: 0 10px 30px -12px rgba(0, 0, 0, 0.7);
@@ -213,6 +217,14 @@
   --accent-hover: var(--focus);
 
   --selection-bg: var(--selection);
+
+  /* Hero bloom (Signal Bloom): a low-alpha radial wash of the LIVE cyan behind
+   * the landing headline. Derived — never a new hue; strength is per-theme LAW. */
+  --glow-hero: radial-gradient(
+    58% 44% at 50% 28%,
+    color-mix(in srgb, var(--state-live) var(--glow-hero-alpha), transparent),
+    transparent 72%
+  );
 
   /* Pill fg/solid forward to the six state tokens (won→reply, lost→idle/dim,
    * draft→overdue) — text/bg AA-verified in the table above. */
@@ -271,6 +283,7 @@
     --state-draft-bg: #f6ecd7;
 
     --lamp-glow: none; /* light theme prints solid dots — no glow */
+    --glow-hero-alpha: 4%; /* hero bloom near-off in light (mirrors the lamp-glow rule) */
 
     --shadow-1: 0 1px 2px rgba(16, 20, 26, 0.1);
     --shadow-2: 0 10px 30px -12px rgba(16, 20, 26, 0.22);
@@ -315,6 +328,7 @@
   --state-draft-bg: #2e2410;
 
   --lamp-glow: 0 0 8px currentColor;
+  --glow-hero-alpha: 16%; /* hero bloom strength — dark carries the wash */
 
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-2: 0 10px 30px -12px rgba(0, 0, 0, 0.7);
@@ -357,6 +371,7 @@
   --state-draft-bg: #f6ecd7;
 
   --lamp-glow: none;
+  --glow-hero-alpha: 4%; /* hero bloom near-off in light (mirrors the lamp-glow rule) */
 
   --shadow-1: 0 1px 2px rgba(16, 20, 26, 0.1);
   --shadow-2: 0 10px 30px -12px rgba(16, 20, 26, 0.22);

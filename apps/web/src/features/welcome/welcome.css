@@ -1,10 +1,10 @@
 /*
  * The landing page — "Operator Grid". A dense, high-contrast working surface;
  * chrome is achromatic and color is spent ONLY on state (the six lamps and the
- * vignette states). All colors/fonts resolve from welcome-tokens.css so both
- * themes and the re-skin merge hold automatically. The only choreography is the
- * hero board-ignition; the three acts get a simple scroll reveal; reply+live
- * lamps carry the single ambient pulse (dark only).
+ * vignette states). All colors/fonts resolve from the GLOBAL styles/tokens.css
+ * law + alias layers (the per-page welcome-tokens.css was merged and deleted).
+ * The only choreography is the hero board-ignition; the three acts get a simple
+ * scroll reveal; reply+live lamps carry the single ambient pulse (dark only).
  */
 
 /* ── Shell ─────────────────────────────────────────────────────────────────── */
@@ -17,6 +17,11 @@
   line-height: 1.5;
   /* Focus ring uses the law focus color inside this subtree. */
   --focus-ring: var(--focus);
+  /* Landing layout constants — poses, not law. --wc-row-h is intentionally
+   * FIXED (not var(--row-h)) so [data-density='comfortable'] never reflows
+   * the marketing wall. */
+  --wc-maxw: 1080px;
+  --wc-row-h: 36px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -34,7 +39,7 @@
   background: var(--panel-raised);
   color: var(--ink);
   border: 1px solid var(--line);
-  border-radius: var(--wc-r-control);
+  border-radius: var(--radius-1);
   transition: top 150ms var(--ease-out);
 }
 .sb-welcome__skip:focus-visible {
@@ -64,7 +69,7 @@
   background: var(--ink);
   color: var(--bg);
   border: 1px solid var(--ink);
-  border-radius: var(--wc-r-control);
+  border-radius: var(--radius-1);
   font-family: var(--font-display);
   font-weight: 600;
   font-size: 16px;
@@ -127,7 +132,7 @@
   height: var(--wc-row-h);
   padding: 0 var(--space-4);
   border: 1px solid var(--line);
-  border-radius: var(--wc-r-control);
+  border-radius: var(--radius-1);
   color: var(--ink);
   font-size: 13px;
   font-weight: 500;
@@ -154,7 +159,7 @@
   height: var(--wc-row-h);
   padding: 0;
   border: 1px solid var(--line);
-  border-radius: var(--wc-r-control);
+  border-radius: var(--radius-1);
   background: transparent;
   color: var(--ink);
   cursor: pointer;
@@ -261,6 +266,15 @@
   mask-image: radial-gradient(125% 92% at 50% 0%, #000 42%, transparent 80%);
   opacity: 1;
 }
+/* Signal Bloom: a low-alpha radial wash of the LIVE cyan behind the headline.
+ * Painted entirely by the --glow-hero alias (strength is per-theme LAW —
+ * dark carries it, light is near-off). Never a new hue. */
+.sb-welcome__hero-bloom {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--glow-hero);
+}
 .sb-welcome__hero-inner {
   position: relative;
   max-width: var(--wc-maxw);
@@ -304,22 +318,22 @@
   color: var(--ink-dim);
 }
 .sb-welcome__lamp--reply {
-  color: var(--reply);
+  color: var(--state-reply);
 }
 .sb-welcome__lamp--overdue {
-  color: var(--overdue);
+  color: var(--state-overdue);
 }
 .sb-welcome__lamp--seq {
-  color: var(--seq);
+  color: var(--state-seq);
 }
 .sb-welcome__lamp--dnc {
-  color: var(--dnc);
+  color: var(--state-dnc);
 }
 .sb-welcome__lamp--live {
-  color: var(--live);
+  color: var(--state-live);
 }
 .sb-welcome__lamp--idle {
-  color: var(--idle);
+  color: var(--state-idle);
 }
 /* Glow (dark only, via --lamp-glow) + ambient pulse: reply + live ONLY. */
 .sb-welcome__lamp--reply .sb-welcome__lamp-dot,
@@ -341,11 +355,16 @@
 .sb-welcome__headline {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: clamp(34px, 6vw, 68px);
+  font-size: clamp(var(--fs-display-lg), 7.2vw, var(--fs-display-2xl));
   line-height: 1.02;
   letter-spacing: -0.02em;
   color: var(--ink);
   max-width: 16ch;
+}
+@media (max-width: 560px) {
+  .sb-welcome__headline {
+    font-size: clamp(var(--fs-display), 9vw, var(--fs-display-xl));
+  }
 }
 .sb-welcome__headline-line {
   display: block;
@@ -392,39 +411,47 @@
   color: var(--ink-dim);
 }
 
-/* ── Hero product frame (live DOM, perspective-tilted, no screenshots) ─────── */
-.sb-welcome__frame-wrap {
+/* ── Hero status wall (Signal Bloom: full-bleed, flat, live DOM) ───────────── */
+.sb-welcome__wall-wrap {
   align-self: stretch;
   margin-top: clamp(var(--space-8), 6vw, 72px);
-  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 97%);
-  mask-image: linear-gradient(to bottom, #000 55%, transparent 97%);
+  /* Full-bleed: escape the centered hero column to the viewport edges. */
+  margin-inline: calc(50% - 50vw);
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 98%);
+  mask-image: linear-gradient(to bottom, #000 62%, transparent 98%);
 }
-.sb-welcome__frame-tilt {
-  max-width: 880px;
-  margin: 0 auto;
-}
-/* The tilt is desktop-only and STATIC — a pose, not motion. */
-@media (min-width: 861px) {
-  .sb-welcome__frame-wrap {
-    perspective: 1200px;
-  }
-  .sb-welcome__frame-tilt {
-    transform: rotateX(17deg);
-  }
-}
-.sb-welcome__frame {
+.sb-welcome__wall {
   background: var(--panel);
-  border: 1px solid var(--line);
-  box-shadow: 0 32px 64px -32px color-mix(in srgb, var(--ink) 30%, transparent);
+  border-block: 1px solid var(--line);
   text-align: left;
 }
-.sb-welcome__frame-bar {
+.sb-welcome__wall-bar {
   display: flex;
   align-items: center;
   gap: var(--space-4);
   height: 34px;
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-6);
+  max-width: var(--wc-maxw);
+  margin: 0 auto;
   border-bottom: 1px solid var(--line);
+}
+.sb-welcome__wall-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sb-welcome__wall-row {
+  display: grid;
+  grid-template-columns: 9px minmax(96px, 150px) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-4);
+  height: var(--wc-row-h);
+  padding: 0 var(--space-6);
+  max-width: var(--wc-maxw);
+  margin: 0 auto;
+}
+.sb-welcome__wall-row + .sb-welcome__wall-row {
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
 }
 .sb-welcome__frame-brand {
   display: inline-flex;
@@ -469,17 +496,24 @@
   background: currentColor;
 }
 .sb-welcome__frame-dot--reply {
-  color: var(--reply);
+  color: var(--state-reply);
   box-shadow: var(--lamp-glow);
 }
 .sb-welcome__frame-dot--overdue {
-  color: var(--overdue);
+  color: var(--state-overdue);
 }
 .sb-welcome__frame-dot--seq {
-  color: var(--seq);
+  color: var(--state-seq);
 }
 .sb-welcome__frame-dot--idle {
-  color: var(--idle);
+  color: var(--state-idle);
+}
+.sb-welcome__frame-dot--dnc {
+  color: var(--state-dnc);
+}
+.sb-welcome__frame-dot--live {
+  color: var(--state-live);
+  box-shadow: var(--lamp-glow);
 }
 .sb-welcome__frame-company {
   color: var(--ink);
@@ -511,7 +545,7 @@
   font-variant-numeric: tabular-nums;
 }
 @media (max-width: 560px) {
-  .sb-welcome__frame-row {
+  .sb-welcome__wall-row {
     grid-template-columns: 9px minmax(0, 1fr) auto auto;
   }
   .sb-welcome__frame-line {
@@ -554,9 +588,16 @@
   white-space: nowrap;
 }
 
-/* ── Hero ignition (plays once; gated by data-ignite) ──────────────────────── */
+/* ── Hero ignition (plays once; gated by data-ignite; all delays derive from
+ *    --dur-ignition so the 500–800ms choreography is tunable in one place) ── */
 .sb-welcome__hero[data-ignite='igniting'] .sb-welcome__hero-grid {
-  transition: opacity 260ms var(--ease-out);
+  transition: opacity calc(var(--dur-ignition) * 0.4) var(--ease-out);
+  @starting-style {
+    opacity: 0;
+  }
+}
+.sb-welcome__hero[data-ignite='igniting'] .sb-welcome__hero-bloom {
+  transition: opacity calc(var(--dur-ignition) * 0.5) var(--ease-out);
   @starting-style {
     opacity: 0;
   }
@@ -565,7 +606,7 @@
   transition:
     opacity 200ms var(--ease-out),
     transform 200ms var(--ease-out);
-  transition-delay: calc(120ms + var(--lamp-i, 0) * 46ms);
+  transition-delay: calc(var(--dur-ignition) * 0.19 + var(--lamp-i, 0) * 46ms);
   @starting-style {
     opacity: 0;
     transform: scale(0.96);
@@ -575,7 +616,7 @@
   transition:
     opacity 240ms var(--ease-out),
     transform 240ms var(--ease-out);
-  transition-delay: 400ms;
+  transition-delay: calc(var(--dur-ignition) * 0.62);
   @starting-style {
     opacity: 0;
     transform: translateY(8px);
@@ -585,7 +626,7 @@
   transition:
     opacity 200ms var(--ease-out),
     transform 200ms var(--ease-out);
-  transition-delay: 470ms;
+  transition-delay: calc(var(--dur-ignition) * 0.73);
   @starting-style {
     opacity: 0;
     transform: translateY(6px);
@@ -595,7 +636,7 @@
   transition:
     opacity 200ms var(--ease-out),
     transform 200ms var(--ease-out);
-  transition-delay: 520ms;
+  transition-delay: calc(var(--dur-ignition) * 0.81);
   @starting-style {
     opacity: 0;
     transform: translateY(6px);
@@ -603,20 +644,27 @@
 }
 .sb-welcome__hero[data-ignite='igniting'] .sb-welcome__stats {
   transition: opacity 200ms var(--ease-out);
-  transition-delay: 560ms;
+  transition-delay: calc(var(--dur-ignition) * 0.88);
   @starting-style {
     opacity: 0;
   }
 }
-/* The frame surfaces last — the entrance still lands inside the 800ms budget. */
-.sb-welcome__hero[data-ignite='igniting'] .sb-welcome__frame-wrap {
-  transition:
-    opacity 220ms var(--ease-out),
-    transform 220ms var(--ease-out);
-  transition-delay: 580ms;
+/* The wall sweeps on row-by-row — 18ms × 12 rows still lands ≤ 800ms total. */
+.sb-welcome__hero[data-ignite='igniting'] .sb-welcome__wall-wrap {
+  transition: opacity calc(var(--dur-ignition) * 0.35) var(--ease-out);
+  transition-delay: calc(var(--dur-ignition) * 0.5);
   @starting-style {
     opacity: 0;
-    transform: translateY(10px);
+  }
+}
+.sb-welcome__hero[data-ignite='igniting'] .sb-welcome__wall-row {
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out);
+  transition-delay: calc(var(--dur-ignition) * 0.55 + var(--row-i, 0) * 18ms);
+  @starting-style {
+    opacity: 0;
+    transform: translateY(6px);
   }
 }
 
@@ -740,7 +788,7 @@
 }
 .sb-welcome__trow.is-active {
   background: var(--panel-raised);
-  border-left-color: var(--reply);
+  border-left-color: var(--state-reply);
 }
 .sb-welcome__trow-main {
   display: flex;
@@ -833,7 +881,7 @@
   padding: var(--space-3);
   background: var(--panel-raised);
   border: 1px solid var(--line);
-  border-left: 2px solid var(--live);
+  border-left: 2px solid var(--state-live);
 }
 .sb-welcome__call-timer {
   font-size: 15px;
@@ -848,7 +896,7 @@
   color: var(--ink-dim);
 }
 .sb-welcome__call-consent svg {
-  color: var(--reply);
+  color: var(--state-reply);
 }
 .sb-welcome__call-rec {
   margin-left: auto;
@@ -858,14 +906,14 @@
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.1em;
-  color: var(--dnc);
+  color: var(--state-dnc);
 }
 .sb-welcome__call-rec::before {
   content: '';
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: var(--dnc);
+  background: var(--state-dnc);
 }
 
 /* Sequence vignette */
@@ -898,10 +946,10 @@
   background: var(--line);
 }
 .sb-welcome__seq-step.is-done {
-  background: var(--seq);
+  background: var(--state-seq);
 }
 .sb-welcome__seq-step.is-here {
-  background: var(--reply);
+  background: var(--state-reply);
 }
 .sb-welcome__seq-count {
   font-size: 11px;
@@ -914,7 +962,7 @@
   padding: var(--space-3);
   background: var(--panel-raised);
   border: 1px solid var(--line);
-  border-left: 2px solid var(--reply);
+  border-left: 2px solid var(--state-reply);
 }
 .sb-welcome__seq-quote {
   font-size: 13px;
@@ -932,9 +980,9 @@
   gap: var(--space-2);
   height: 22px;
   padding: 0 var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--reply) 45%, var(--line));
-  border-radius: var(--wc-r-control);
-  background: color-mix(in srgb, var(--reply) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--state-reply) 45%, var(--line));
+  border-radius: var(--radius-1);
+  background: color-mix(in srgb, var(--state-reply) 12%, transparent);
 }
 .sb-welcome__state-chip-word {
   font-size: 11px;
@@ -946,7 +994,7 @@
 .sb-welcome__state-chip-cause {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--reply);
+  color: var(--state-reply);
 }
 .sb-welcome__seq-note {
   font-size: 12px;
@@ -1039,7 +1087,7 @@
   background: var(--panel-raised);
   border: 1px solid var(--line);
   border-bottom-width: 2px;
-  border-radius: var(--wc-r-control);
+  border-radius: var(--radius-1);
   color: var(--ink);
   font-family: var(--font-mono);
   font-size: 11px;

@@ -67,7 +67,7 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe('WelcomePage — hero frame + nav menu + accounts band', () => {
+describe('WelcomePage — hero wall + nav menu + accounts band', () => {
   test('nav anchors point at real sections on the page', () => {
     const { container } = renderWelcome();
     for (const [name, target] of [
@@ -94,14 +94,25 @@ describe('WelcomePage — hero frame + nav menu + accounts band', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });
 
-  test('the hero product frame is live DOM, decorative, and shows the triage rows', () => {
+  test('the hero status wall is live DOM, decorative, and shows twelve six-state rows', () => {
     const { container } = renderWelcome();
-    const frame = container.querySelector('.sb-welcome__frame-wrap');
-    expect(frame).not.toBeNull();
-    expect(frame).toHaveAttribute('aria-hidden', 'true');
-    expect(frame?.querySelectorAll('.sb-welcome__frame-row')).toHaveLength(5);
-    expect(frame?.textContent).toContain('Northwind Labs');
-    expect(frame?.querySelector('img')).toBeNull();
+    const wall = container.querySelector('.sb-welcome__wall-wrap');
+    expect(wall).not.toBeNull();
+    expect(wall).toHaveAttribute('aria-hidden', 'true');
+    expect(wall?.querySelectorAll('.sb-welcome__wall-row')).toHaveLength(12);
+    expect(wall?.textContent).toContain('Northwind Labs');
+    // The wall wears the whole color budget: all six state dots present.
+    for (const state of ['reply', 'overdue', 'seq', 'dnc', 'live', 'idle']) {
+      expect(wall?.querySelector(`.sb-welcome__frame-dot--${state}`)).not.toBeNull();
+    }
+    expect(wall?.querySelector('img')).toBeNull();
+  });
+
+  test('the hero bloom wash exists and is decorative (cyan derived, CSS-owned)', () => {
+    const { container } = renderWelcome();
+    const bloom = container.querySelector('.sb-welcome__hero-bloom');
+    expect(bloom).not.toBeNull();
+    expect(bloom).toHaveAttribute('aria-hidden', 'true');
   });
 
   test('the accounts band lists demo accounts as text wordmarks (no logos)', () => {
@@ -118,6 +129,7 @@ describe('WelcomePage — route + content', () => {
     renderWelcome();
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Pick up the line.');
     expect(screen.getByText(/one keystroke away/i)).toBeInTheDocument();
+    expect(screen.getByText(/wears a state lamp/i)).toBeInTheDocument();
     expect(screen.getByText('0.9s')).toBeInTheDocument();
     expect(screen.getByText('to the next call')).toBeInTheDocument();
   });

@@ -43,7 +43,7 @@ export const ACCOUNTS_BAND = {
 
 export const HERO = {
   headline: ['Pick up the line.', 'The rest is already dialed.'],
-  sub: 'Switchboard lines up every reply, task, and call in one keyboard-driven queue — so the next move is always one keystroke away.',
+  sub: 'Every reply, task, and call lines up in one keyboard-driven queue. Each lead wears a state lamp — REPLY, OVERDUE, DNC — so the board reads at a glance and the next move is always one keystroke away.',
   cta: 'Open Switchboard',
 } as const;
 
@@ -57,6 +57,12 @@ export const HERO_STATS: readonly HeroStat[] = [
   { value: '1 key', label: 'to the next call' },
   { value: '100%', label: 'of touches on the timeline' },
 ];
+
+/** Chrome strings for the hero status wall — 12 fixture rows on deck. */
+export const WALL = {
+  crumb: 'Live board · 12 on deck',
+  kbd: 'J / K',
+} as const;
 
 export interface FeatureActCopy {
   id: string;
