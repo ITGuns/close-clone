@@ -562,7 +562,10 @@
 }
 .sb-coachmark__step {
   margin: 0;
-  color: var(--ink-3);
+  /* ink-2, not ink-3: on --surface-2 (panel-raised) ink-3 is only 4.30:1 in
+   * dark — under AA for this 11px counter. ink-2 clears it (4.90 dark / 6.37
+   * light). The token AA table certifies ink-3 against bg/panel only. */
+  color: var(--ink-2);
   font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
 }
