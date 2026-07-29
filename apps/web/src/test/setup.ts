@@ -3,6 +3,13 @@ import { afterAll, afterEach, beforeAll } from 'vitest';
 import { server } from '../mocks/server.ts';
 
 /*
+ * The first-run guided tour auto-opens on a fresh profile, and every jsdom test
+ * is a fresh profile. Suppress it suite-wide; the tour's own tests clear this
+ * key in their beforeEach to exercise the auto-open path.
+ */
+localStorage.setItem('sb-tour-suppress', '1');
+
+/*
  * jsdom does not implement matchMedia; the theme + reduced-motion code paths
  * feature-detect it, but a stub lets the "system" theme path exercise its
  * listener wiring in tests.

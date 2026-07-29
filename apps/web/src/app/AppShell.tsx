@@ -9,6 +9,7 @@ import { CommsProvider } from '../features/comms/index.ts';
 import { CallProvider } from '../features/calling/index.ts';
 import { SmsProvider } from '../features/sms/index.ts';
 import { AiProvider } from '../features/ai/index.ts';
+import { TourProvider } from '../features/tour/index.ts';
 import { LeftRail } from './LeftRail.tsx';
 import { TopBar } from './TopBar.tsx';
 import { useRailCollapsed } from './railState.ts';
@@ -35,7 +36,9 @@ export function AppShell(): JSX.Element {
           <CallProvider>
             <SmsProvider>
               <AiProvider>
-                <ShellChrome />
+                <TourProvider>
+                  <ShellChrome />
+                </TourProvider>
               </AiProvider>
             </SmsProvider>
           </CallProvider>

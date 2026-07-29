@@ -44,6 +44,7 @@ export function TopBar({ searchRef, onOpenPalette }: TopBarProps): JSX.Element {
       <form
         className="sb-topbar__search"
         role="search"
+        data-tour="topbar-search"
         onSubmit={(e) => {
           e.preventDefault();
           if (query.trim()) navigate(`/leads?q=${encodeURIComponent(query.trim())}`);

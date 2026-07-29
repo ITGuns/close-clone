@@ -30,6 +30,7 @@ function RailLink({ item, collapsed }: RailLinkProps): JSX.Element {
     <NavLink
       to={item.to}
       aria-label={collapsed ? item.label : undefined}
+      data-tour={`nav-${item.to.slice(1)}`}
       className={({ isActive }) => cx('sb-rail__item', isActive && 'is-active')}
     >
       <Icon size={16} className="sb-rail__icon" />
