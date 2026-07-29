@@ -266,6 +266,15 @@
   mask-image: radial-gradient(125% 92% at 50% 0%, #000 42%, transparent 80%);
   opacity: 1;
 }
+/* Signal Bloom: a low-alpha radial wash of the LIVE cyan behind the headline.
+ * Painted entirely by the --glow-hero alias (strength is per-theme LAW —
+ * dark carries it, light is near-off). Never a new hue. */
+.sb-welcome__hero-bloom {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: var(--glow-hero);
+}
 .sb-welcome__hero-inner {
   position: relative;
   max-width: var(--wc-maxw);
@@ -346,11 +355,16 @@
 .sb-welcome__headline {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: clamp(34px, 6vw, 68px);
+  font-size: clamp(var(--fs-display-lg), 7.2vw, var(--fs-display-2xl));
   line-height: 1.02;
   letter-spacing: -0.02em;
   color: var(--ink);
   max-width: 16ch;
+}
+@media (max-width: 560px) {
+  .sb-welcome__headline {
+    font-size: clamp(var(--fs-display), 9vw, var(--fs-display-xl));
+  }
 }
 .sb-welcome__headline-line {
   display: block;
@@ -574,9 +588,16 @@
   white-space: nowrap;
 }
 
-/* ── Hero ignition (plays once; gated by data-ignite) ──────────────────────── */
+/* ── Hero ignition (plays once; gated by data-ignite; all delays derive from
+ *    --dur-ignition so the 500–800ms choreography is tunable in one place) ── */
 .sb-welcome__hero[data-ignite='igniting'] .sb-welcome__hero-grid {
-  transition: opacity 260ms var(--ease-out);
+  transition: opacity calc(var(--dur-ignition) * 0.4) var(--ease-out);
+  @starting-style {
+    opacity: 0;
+  }
+}
+.sb-welcome__hero[data-ignite='igniting'] .sb-welcome__hero-bloom {
+  transition: opacity calc(var(--dur-ignition) * 0.5) var(--ease-out);
   @starting-style {
     opacity: 0;
   }
@@ -585,7 +606,7 @@
   transition:
     opacity 200ms var(--ease-out),
     transform 200ms var(--ease-out);
-  transition-delay: calc(120ms + var(--lamp-i, 0) * 46ms);
+  transition-delay: calc(var(--dur-ignition) * 0.19 + var(--lamp-i, 0) * 46ms);
   @starting-style {
     opacity: 0;
     transform: scale(0.96);
@@ -595,7 +616,7 @@
   transition:
     opacity 240ms var(--ease-out),
     transform 240ms var(--ease-out);
-  transition-delay: 400ms;
+  transition-delay: calc(var(--dur-ignition) * 0.62);
   @starting-style {
     opacity: 0;
     transform: translateY(8px);
@@ -605,7 +626,7 @@
   transition:
     opacity 200ms var(--ease-out),
     transform 200ms var(--ease-out);
-  transition-delay: 470ms;
+  transition-delay: calc(var(--dur-ignition) * 0.73);
   @starting-style {
     opacity: 0;
     transform: translateY(6px);
@@ -615,7 +636,7 @@
   transition:
     opacity 200ms var(--ease-out),
     transform 200ms var(--ease-out);
-  transition-delay: 520ms;
+  transition-delay: calc(var(--dur-ignition) * 0.81);
   @starting-style {
     opacity: 0;
     transform: translateY(6px);
@@ -623,20 +644,27 @@
 }
 .sb-welcome__hero[data-ignite='igniting'] .sb-welcome__stats {
   transition: opacity 200ms var(--ease-out);
-  transition-delay: 560ms;
+  transition-delay: calc(var(--dur-ignition) * 0.88);
   @starting-style {
     opacity: 0;
   }
 }
-/* The wall surfaces last — the entrance still lands inside the 800ms budget. */
+/* The wall sweeps on row-by-row — 18ms × 12 rows still lands ≤ 800ms total. */
 .sb-welcome__hero[data-ignite='igniting'] .sb-welcome__wall-wrap {
-  transition:
-    opacity 220ms var(--ease-out),
-    transform 220ms var(--ease-out);
-  transition-delay: 580ms;
+  transition: opacity calc(var(--dur-ignition) * 0.35) var(--ease-out);
+  transition-delay: calc(var(--dur-ignition) * 0.5);
   @starting-style {
     opacity: 0;
-    transform: translateY(10px);
+  }
+}
+.sb-welcome__hero[data-ignite='igniting'] .sb-welcome__wall-row {
+  transition:
+    opacity 200ms var(--ease-out),
+    transform 200ms var(--ease-out);
+  transition-delay: calc(var(--dur-ignition) * 0.55 + var(--row-i, 0) * 18ms);
+  @starting-style {
+    opacity: 0;
+    transform: translateY(6px);
   }
 }
 

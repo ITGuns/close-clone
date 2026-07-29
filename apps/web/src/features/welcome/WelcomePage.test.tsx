@@ -108,6 +108,13 @@ describe('WelcomePage — hero wall + nav menu + accounts band', () => {
     expect(wall?.querySelector('img')).toBeNull();
   });
 
+  test('the hero bloom wash exists and is decorative (cyan derived, CSS-owned)', () => {
+    const { container } = renderWelcome();
+    const bloom = container.querySelector('.sb-welcome__hero-bloom');
+    expect(bloom).not.toBeNull();
+    expect(bloom).toHaveAttribute('aria-hidden', 'true');
+  });
+
   test('the accounts band lists demo accounts as text wordmarks (no logos)', () => {
     const { container } = renderWelcome();
     const band = screen.getByRole('region', { name: 'On the board this week' });

@@ -19,6 +19,7 @@ export function Hero({ ignition }: { ignition: IgnitionState }): JSX.Element {
   return (
     <header className="sb-welcome__hero" data-ignite={ignition}>
       <div className="sb-welcome__hero-grid" aria-hidden="true" />
+      <div className="sb-welcome__hero-bloom" aria-hidden="true" />
       <div className="sb-welcome__hero-inner">
         <ul className="sb-welcome__lamps" aria-label="Lead states, at a glance">
           {HERO_LAMPS.map((lamp, i) => (

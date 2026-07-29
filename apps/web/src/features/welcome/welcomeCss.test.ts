@@ -40,4 +40,16 @@ describe('welcome.css — global law tokens only (merge-dedup)', () => {
     // 3-digit #000 inside mask-image gradients is a mask stop, not a color choice.
     expect(css).not.toMatch(/#[0-9a-fA-F]{6}\b/);
   });
+
+  test('bloom + ignition are token-driven: --glow-hero paints, --dur-ignition times', () => {
+    expect(css).toContain('var(--glow-hero)');
+    expect(css).toContain('var(--dur-ignition)');
+    // Every choreography delay derives from the one token — no literal-first delays.
+    expect(css).not.toMatch(/transition-delay:\s*\d+ms/);
+  });
+
+  test('headline reads the new display steps (56/72px used only here)', () => {
+    expect(css).toMatch(/__headline[^}]*var\(--fs-display-2xl\)/);
+    expect(css).toMatch(/var\(--fs-display-xl\)/);
+  });
 });
