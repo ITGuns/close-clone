@@ -12,6 +12,11 @@ import { ADMIN_USER, openEmailComposer, openFirstLead, readInboxStat } from './s
 // Start logged out — this spec exercises the real welcome + dev-login flow.
 test.use({ storageState: { cookies: [], origins: [] } });
 
+// The rep loop predates the tour; suppress it here — onboarding.spec.ts owns it.
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => window.localStorage.setItem('sb-tour-suppress', '1'));
+});
+
 test('rep loop: welcome → login → lead + composer → inbox queue', async ({ page }) => {
   test.setTimeout(120_000);
   let leadName = '';
