@@ -397,39 +397,47 @@
   color: var(--ink-dim);
 }
 
-/* ── Hero product frame (live DOM, perspective-tilted, no screenshots) ─────── */
-.sb-welcome__frame-wrap {
+/* ── Hero status wall (Signal Bloom: full-bleed, flat, live DOM) ───────────── */
+.sb-welcome__wall-wrap {
   align-self: stretch;
   margin-top: clamp(var(--space-8), 6vw, 72px);
-  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 97%);
-  mask-image: linear-gradient(to bottom, #000 55%, transparent 97%);
+  /* Full-bleed: escape the centered hero column to the viewport edges. */
+  margin-inline: calc(50% - 50vw);
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, transparent 98%);
+  mask-image: linear-gradient(to bottom, #000 62%, transparent 98%);
 }
-.sb-welcome__frame-tilt {
-  max-width: 880px;
-  margin: 0 auto;
-}
-/* The tilt is desktop-only and STATIC — a pose, not motion. */
-@media (min-width: 861px) {
-  .sb-welcome__frame-wrap {
-    perspective: 1200px;
-  }
-  .sb-welcome__frame-tilt {
-    transform: rotateX(17deg);
-  }
-}
-.sb-welcome__frame {
+.sb-welcome__wall {
   background: var(--panel);
-  border: 1px solid var(--line);
-  box-shadow: 0 32px 64px -32px color-mix(in srgb, var(--ink) 30%, transparent);
+  border-block: 1px solid var(--line);
   text-align: left;
 }
-.sb-welcome__frame-bar {
+.sb-welcome__wall-bar {
   display: flex;
   align-items: center;
   gap: var(--space-4);
   height: 34px;
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-6);
+  max-width: var(--wc-maxw);
+  margin: 0 auto;
   border-bottom: 1px solid var(--line);
+}
+.sb-welcome__wall-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sb-welcome__wall-row {
+  display: grid;
+  grid-template-columns: 9px minmax(96px, 150px) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-4);
+  height: var(--wc-row-h);
+  padding: 0 var(--space-6);
+  max-width: var(--wc-maxw);
+  margin: 0 auto;
+}
+.sb-welcome__wall-row + .sb-welcome__wall-row {
+  border-top: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
 }
 .sb-welcome__frame-brand {
   display: inline-flex;
@@ -486,6 +494,13 @@
 .sb-welcome__frame-dot--idle {
   color: var(--state-idle);
 }
+.sb-welcome__frame-dot--dnc {
+  color: var(--state-dnc);
+}
+.sb-welcome__frame-dot--live {
+  color: var(--state-live);
+  box-shadow: var(--lamp-glow);
+}
 .sb-welcome__frame-company {
   color: var(--ink);
   font-size: 12px;
@@ -516,7 +531,7 @@
   font-variant-numeric: tabular-nums;
 }
 @media (max-width: 560px) {
-  .sb-welcome__frame-row {
+  .sb-welcome__wall-row {
     grid-template-columns: 9px minmax(0, 1fr) auto auto;
   }
   .sb-welcome__frame-line {
@@ -613,8 +628,8 @@
     opacity: 0;
   }
 }
-/* The frame surfaces last — the entrance still lands inside the 800ms budget. */
-.sb-welcome__hero[data-ignite='igniting'] .sb-welcome__frame-wrap {
+/* The wall surfaces last — the entrance still lands inside the 800ms budget. */
+.sb-welcome__hero[data-ignite='igniting'] .sb-welcome__wall-wrap {
   transition:
     opacity 220ms var(--ease-out),
     transform 220ms var(--ease-out);

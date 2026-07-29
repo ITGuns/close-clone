@@ -58,6 +58,12 @@ export const HERO_STATS: readonly HeroStat[] = [
   { value: '100%', label: 'of touches on the timeline' },
 ];
 
+/** Chrome strings for the hero status wall — 12 fixture rows on deck. */
+export const WALL = {
+  crumb: 'Live board · 12 on deck',
+  kbd: 'J / K',
+} as const;
+
 export interface FeatureActCopy {
   id: string;
   label: string;
