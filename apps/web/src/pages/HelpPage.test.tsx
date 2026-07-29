@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -9,6 +9,11 @@ import { server } from '../mocks/server.ts';
 import { makeSmartView } from '../features/leads/test/factories.ts';
 import { HelpPage } from './HelpPage.tsx';
 import { ViewsPage } from './ViewsPage.tsx';
+
+const openTour = vi.fn();
+vi.mock('../features/tour/index.ts', () => ({
+  useTour: () => ({ openTour }),
+}));
 
 /*
  * Help tells the user how to build a Smart View. This walks that instruction end
@@ -57,5 +62,17 @@ describe('HelpPage — "build one under Views" is walkable', () => {
     renderHelp();
     expect(screen.getByRole('link', { name: 'Settings → About' })).toBeInTheDocument();
     expect(document.body.textContent).toContain('Build and workspace details live in');
+  });
+});
+
+describe('HelpPage — guided-tour replay', () => {
+  test('offers a guided-tour replay in the page actions', async () => {
+    render(
+      <MemoryRouter>
+        <HelpPage />
+      </MemoryRouter>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Replay the guided tour' }));
+    expect(openTour).toHaveBeenCalledTimes(1);
   });
 });

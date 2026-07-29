@@ -1,6 +1,7 @@
 import type { JSX } from 'react';
 import { Link } from 'react-router-dom';
-import { Kbd } from '../ui/index.ts';
+import { Button, Kbd } from '../ui/index.ts';
+import { useTour } from '../features/tour/index.ts';
 import { Page } from './Page.tsx';
 
 /*
@@ -109,10 +110,12 @@ function FaqList({ items }: { items: readonly Faq[] }): JSX.Element {
 }
 
 export function HelpPage(): JSX.Element {
+  const { openTour } = useTour();
   return (
     <Page
       title="Support & FAQs"
       subtitle="How Switchboard behaves, why it sometimes says no, and where to get help."
+      actions={<Button onClick={openTour}>Replay the guided tour</Button>}
     >
       <div className="sb-help">
         <section className="sb-help__section" aria-labelledby="help-rails">
