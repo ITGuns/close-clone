@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { JSX } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import type { Lead, SmartView } from '@switchboard/shared';
 import { ApiError } from '../../../api/index.ts';
@@ -261,7 +261,15 @@ export function LeadsSurface({ viewId }: LeadsSurfaceProps): JSX.Element {
               }
               {...(q
                 ? { actions: <Button onClick={() => setQuery('')}>Clear filter</Button> }
-                : {})}
+                : viewId
+                  ? {}
+                  : {
+                      actions: (
+                        <Link className="sb-btn" to="/import">
+                          Import leads
+                        </Link>
+                      ),
+                    })}
             />
           ) : (
             <LeadsTable

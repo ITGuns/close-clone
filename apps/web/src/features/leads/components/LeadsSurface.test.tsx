@@ -108,6 +108,15 @@ describe('LeadsSurface — All leads', () => {
     expect(screen.getByText(/INTERNAL/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
+
+  test('true empty state offers the import path', async () => {
+    useReferenceHandlers();
+    server.use(http.get(api('/leads'), () => HttpResponse.json({ items: [] })));
+    renderAt('/leads');
+    await screen.findByText('No leads yet');
+    const cta = screen.getByRole('link', { name: 'Import leads' });
+    expect(cta).toHaveAttribute('href', '/import');
+  });
 });
 
 describe('LeadsSurface — Smart View selection', () => {
