@@ -129,6 +129,7 @@ describe('WelcomePage — route + content', () => {
     renderWelcome();
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Pick up the line.');
     expect(screen.getByText(/one keystroke away/i)).toBeInTheDocument();
+    expect(screen.getByText(/wears a state lamp/i)).toBeInTheDocument();
     expect(screen.getByText('0.9s')).toBeInTheDocument();
     expect(screen.getByText('to the next call')).toBeInTheDocument();
   });
