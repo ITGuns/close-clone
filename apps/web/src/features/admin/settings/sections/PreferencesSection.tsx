@@ -55,7 +55,9 @@ export function PreferencesSection(): JSX.Element {
         <h1 id="admin-preferences-title" className="admin-section__title">
           Preferences
         </h1>
-        <p className="admin-section__desc">Personal settings. They follow you, not the workspace.</p>
+        <p className="admin-section__desc">
+          Personal settings. They follow you, not the workspace.
+        </p>
       </header>
 
       <fieldset className="admin-fieldset">
@@ -79,8 +81,8 @@ export function PreferencesSection(): JSX.Element {
 
       <h2 className="admin-section__subtitle">Notifications</h2>
       <p className="admin-section__desc">
-        Your own notifications only. Outbound quiet hours for calls, email, and SMS are a
-        compliance rail enforced by the engine — see Compliance.
+        Your own notifications only. Outbound quiet hours for calls, email, and SMS are a compliance
+        rail enforced by the engine — see Compliance.
       </p>
 
       {prefsQuery.isLoading ? (

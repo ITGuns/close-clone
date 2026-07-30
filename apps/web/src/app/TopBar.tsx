@@ -115,10 +115,7 @@ function UserMenu({ user, onSignOut }: { user: User; onSignOut: () => void }): J
           <div className="sb-usermenu__meta-name">{user.name}</div>
           <div className="sb-usermenu__meta-email">{user.email}</div>
         </div>
-        <Link
-          to="/settings?section=profile"
-          className="sb-btn sb-btn--ghost sb-usermenu__settings"
-        >
+        <Link to="/settings?section=profile" className="sb-btn sb-btn--ghost sb-usermenu__settings">
           Account settings
         </Link>
         <button

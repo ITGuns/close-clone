@@ -35,9 +35,7 @@ function renderSettings(section?: string): void {
       <ToastProvider ttl={0}>
         <ThemeProvider>
           <AuthProvider>
-            <MemoryRouter
-              initialEntries={[section ? `/settings?section=${section}` : '/settings']}
-            >
+            <MemoryRouter initialEntries={[section ? `/settings?section=${section}` : '/settings']}>
               <AdminSettingsPage />
             </MemoryRouter>
           </AuthProvider>

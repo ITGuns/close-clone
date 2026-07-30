@@ -27,20 +27,24 @@
 ### Task 1: Contract + decision record (docs only, orchestrator-gated)
 
 **Files:**
+
 - Modify: `D:/CODE/NEW/close-clone/CONTRACTS.md` (version line + one additive bullet)
 - Modify: `D:/CODE/NEW/close-clone/DECISIONS.md` (append one entry)
 
 **Interfaces:**
+
 - Consumes: current CONTRACTS version `1.3.6` (line 3).
 - Produces: contract authority for the endpoints Tasks 2–4 implement: `PATCH /users/me`, `GET /users/me/preferences`, `PATCH /users/me/preferences`.
 
 - [ ] **Step 1: Confirm current version and next decision number**
 
 Run (repo root):
+
 ```bash
 grep -n "^Version:" D:/CODE/NEW/close-clone/CONTRACTS.md
 grep -o "D-0[0-9][0-9]" D:/CODE/NEW/close-clone/DECISIONS.md D:/CODE/NEW/close-clone/CONTRACTS.md | grep -o "D-0[0-9][0-9]" | sort -u | tail -1
 ```
+
 Expected: `Version: 1.3.6.` and the highest existing D-number (D-061 or later). Use version `1.3.7` (or current+1 if it moved) and the next free D-number below; `D-062` is used as the placeholder name in this plan — substitute the real next number consistently.
 
 - [ ] **Step 2: Edit CONTRACTS.md additively**
@@ -72,6 +76,7 @@ git commit -m "docs(contracts): declare self-service account endpoints (v1.3.7, 
 ### Task 2: Account data layer — types, api functions, mock store + handlers
 
 **Files:**
+
 - Modify: `apps/web/src/features/admin/types.ts`
 - Modify: `apps/web/src/features/admin/api.ts`
 - Modify: `apps/web/src/features/admin/queryKeys.ts`
@@ -80,6 +85,7 @@ git commit -m "docs(contracts): declare self-service account endpoints (v1.3.7, 
 - Test: `apps/web/src/features/admin/mocks/accountHandlers.test.ts` (new)
 
 **Interfaces:**
+
 - Consumes: `apiRequest` (`src/api/client.ts`), `ApiError` (`src/api/index.ts`), `readStoredUser` (`src/auth/auth.ts`), `db` fixtures (`src/mocks/fixtures.ts`), `User` from `@switchboard/shared`.
 - Produces (later tasks rely on these exact names):
   - types: `QuietHoursPref { enabled: boolean; start: string; end: string }`, `UserPreferences { desktopNotifications: boolean; emailDigest: boolean; quietHours: QuietHoursPref; updatedAt: string }`, `UserPreferencesPatch { desktopNotifications?; emailDigest?; quietHours? }`, `MePatch { name?: string; timezone?: string }`
@@ -376,11 +382,13 @@ git commit -m "feat(web): self-service account data layer (users/me + preference
 ### Task 3: ProfileSection component
 
 **Files:**
+
 - Create: `apps/web/src/features/admin/settings/sections/ProfileSection.tsx`
 - Modify: `apps/web/src/features/admin/admin.css` (append one block)
 - Test: `apps/web/src/features/admin/settings/sections/ProfileSection.test.tsx` (new)
 
 **Interfaces:**
+
 - Consumes: Task 2's `patchMe`, `getMyPreferences`; `useAuth()` (`user`, `login`) from `src/auth/AuthProvider.tsx`; `useToast` from `src/feedback/ToastProvider.tsx`; `initials` from `src/lib/format.ts`; `Button`, `Field`, `Input`, `Select` from `src/ui/index.ts`.
 - Produces: `export function ProfileSection(): JSX.Element` (consumed by Task 5's `AdminSettingsPage`).
 
@@ -617,8 +625,8 @@ export function ProfileSection(): JSX.Element {
           Profile
         </h1>
         <p className="admin-section__desc">
-          How you appear across Switchboard. Email, role, and sign-in are managed in the
-          company identity provider.
+          How you appear across Switchboard. Email, role, and sign-in are managed in the company
+          identity provider.
         </p>
       </header>
 
@@ -628,8 +636,8 @@ export function ProfileSection(): JSX.Element {
             {initials(trimmed.length > 0 ? trimmed : user.name)}
           </span>
           <p className="admin-profile__avatar-note">
-            Avatars are your initials — they update with your display name. There is no
-            image upload.
+            Avatars are your initials — they update with your display name. There is no image
+            upload.
           </p>
         </div>
 
@@ -681,8 +689,8 @@ export function ProfileSection(): JSX.Element {
         <dd className="admin-mono">{user.idpSubject}</dd>
       </dl>
       <p className="admin-section__desc">
-        Password and two-factor settings live in the identity provider, not here. To change
-        your email or deactivate this account, contact an admin.
+        Password and two-factor settings live in the identity provider, not here. To change your
+        email or deactivate this account, contact an admin.
       </p>
 
       <h2 className="admin-section__subtitle">Your data</h2>
@@ -799,10 +807,12 @@ git commit -m "feat(web): Profile settings section — name/timezone, SSO identi
 ### Task 4: PreferencesSection component
 
 **Files:**
+
 - Create: `apps/web/src/features/admin/settings/sections/PreferencesSection.tsx`
 - Test: `apps/web/src/features/admin/settings/sections/PreferencesSection.test.tsx` (new)
 
 **Interfaces:**
+
 - Consumes: Task 2's `getMyPreferences`, `patchMyPreferences`, `MY_PREFERENCES_QUERY_KEY`, `UserPreferences`, `UserPreferencesPatch`; `useTheme` (`src/theme/ThemeProvider.tsx`), `THEME_CHOICES`/`ThemeChoice` (`src/theme/theme.ts`); `ErrorState`, `Field`, `Input`, `Skeleton`, `Switch` from `src/ui/index.ts`; CSS classes added in Task 3.
 - Produces: `export function PreferencesSection(): JSX.Element` (consumed by Task 5).
 
@@ -981,7 +991,9 @@ export function PreferencesSection(): JSX.Element {
         <h1 id="admin-preferences-title" className="admin-section__title">
           Preferences
         </h1>
-        <p className="admin-section__desc">Personal settings. They follow you, not the workspace.</p>
+        <p className="admin-section__desc">
+          Personal settings. They follow you, not the workspace.
+        </p>
       </header>
 
       <fieldset className="admin-fieldset">
@@ -1005,8 +1017,8 @@ export function PreferencesSection(): JSX.Element {
 
       <h2 className="admin-section__subtitle">Notifications</h2>
       <p className="admin-section__desc">
-        Your own notifications only. Outbound quiet hours for calls, email, and SMS are a
-        compliance rail enforced by the engine — see Compliance.
+        Your own notifications only. Outbound quiet hours for calls, email, and SMS are a compliance
+        rail enforced by the engine — see Compliance.
       </p>
 
       {prefsQuery.isLoading ? (
@@ -1097,12 +1109,14 @@ git commit -m "feat(web): Preferences settings section — theme radios + notifi
 ### Task 5: Wire the sections into the settings surface (nav, icons, page, default)
 
 **Files:**
+
 - Modify: `apps/web/src/features/admin/icons.tsx`
 - Modify: `apps/web/src/features/admin/settings/SettingsNav.tsx`
 - Modify: `apps/web/src/features/admin/settings/AdminSettingsPage.tsx`
 - Test: `apps/web/src/features/admin/settings/AdminSettingsPage.test.tsx` (modify)
 
 **Interfaces:**
+
 - Consumes: `ProfileSection` (Task 3), `PreferencesSection` (Task 4); lucide `CircleUserRound`, `Settings2`.
 - Produces: section ids `'profile'` and `'preferences'`; `DEFAULT_SECTION = 'profile'`; icons `ProfileIcon`, `PreferencesIcon` (used by Task 6's a11y additions only through the page).
 
@@ -1136,9 +1150,7 @@ function renderSettings(section?: string): void {
       <ToastProvider ttl={0}>
         <ThemeProvider>
           <AuthProvider>
-            <MemoryRouter
-              initialEntries={[section ? `/settings?section=${section}` : '/settings']}
-            >
+            <MemoryRouter initialEntries={[section ? `/settings?section=${section}` : '/settings']}>
               <AdminSettingsPage />
             </MemoryRouter>
           </AuthProvider>
@@ -1166,17 +1178,17 @@ afterEach(() => {
 unchanged — it already passes `'users'` explicitly), and add:
 
 ```tsx
-  test('defaults to Profile (personal-first) and reaches Preferences via the sub-rail', async () => {
-    const user = userEvent.setup();
-    renderSettings();
+test('defaults to Profile (personal-first) and reaches Preferences via the sub-rail', async () => {
+  const user = userEvent.setup();
+  renderSettings();
 
-    await screen.findByRole('heading', { name: 'Profile', level: 1 });
-    expect(screen.getByLabelText('Display name')).toHaveValue(fixtureUser().name);
+  await screen.findByRole('heading', { name: 'Profile', level: 1 });
+  expect(screen.getByLabelText('Display name')).toHaveValue(fixtureUser().name);
 
-    await user.click(screen.getByRole('link', { name: 'Preferences' }));
-    await screen.findByRole('heading', { name: 'Preferences', level: 1 });
-    await screen.findByRole('switch', { name: 'Desktop notifications' });
-  });
+  await user.click(screen.getByRole('link', { name: 'Preferences' }));
+  await screen.findByRole('heading', { name: 'Preferences', level: 1 });
+  await screen.findByRole('switch', { name: 'Desktop notifications' });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -1254,9 +1266,11 @@ git commit -m "feat(web): wire Profile + Preferences into /settings, personal-fi
 ### Task 6: Axe smoke for the new sections
 
 **Files:**
+
 - Test: `apps/web/src/features/admin/a11y.test.tsx` (modify)
 
 **Interfaces:**
+
 - Consumes: the page wiring from Task 5; existing `Providers`, `expectNoSeriousViolations`, and hooks in `a11y.test.tsx`; `ThemeProvider`, `AuthProvider`, `storeUser`, `db` (already imported for `db`).
 
 - [ ] **Step 1: Write the failing-or-passing test (axe is the assertion)**
@@ -1274,39 +1288,39 @@ Add inside the existing `describe('settings — axe')` block (theme is driven vi
 `sb-theme` because `ThemeProvider` owns the `data-theme` attribute for these renders):
 
 ```tsx
-  test('the profile and preferences sections have no serious/critical violations (light + dark)', async () => {
-    const u: User | undefined = db.users[0];
-    if (!u) throw new Error('fixture users missing');
-    storeUser(u);
-    try {
-      for (const section of ['profile', 'preferences'] as const) {
-        for (const theme of ['light', 'dark'] as const) {
-          localStorage.setItem('sb-theme', theme);
-          const { container, unmount } = render(
-            <Providers>
-              <ThemeProvider>
-                <AuthProvider>
-                  <MemoryRouter initialEntries={[`/settings?section=${section}`]}>
-                    <AdminSettingsPage />
-                  </MemoryRouter>
-                </AuthProvider>
-              </ThemeProvider>
-            </Providers>,
-          );
-          if (section === 'profile') {
-            await screen.findByLabelText('Display name');
-          } else {
-            await screen.findByRole('switch', { name: 'Desktop notifications' });
-          }
-          await expectNoSeriousViolations(container);
-          unmount();
+test('the profile and preferences sections have no serious/critical violations (light + dark)', async () => {
+  const u: User | undefined = db.users[0];
+  if (!u) throw new Error('fixture users missing');
+  storeUser(u);
+  try {
+    for (const section of ['profile', 'preferences'] as const) {
+      for (const theme of ['light', 'dark'] as const) {
+        localStorage.setItem('sb-theme', theme);
+        const { container, unmount } = render(
+          <Providers>
+            <ThemeProvider>
+              <AuthProvider>
+                <MemoryRouter initialEntries={[`/settings?section=${section}`]}>
+                  <AdminSettingsPage />
+                </MemoryRouter>
+              </AuthProvider>
+            </ThemeProvider>
+          </Providers>,
+        );
+        if (section === 'profile') {
+          await screen.findByLabelText('Display name');
+        } else {
+          await screen.findByRole('switch', { name: 'Desktop notifications' });
         }
+        await expectNoSeriousViolations(container);
+        unmount();
       }
-    } finally {
-      storeUser(null);
-      localStorage.removeItem('sb-theme');
     }
-  });
+  } finally {
+    storeUser(null);
+    localStorage.removeItem('sb-theme');
+  }
+});
 ```
 
 - [ ] **Step 2: Run and fix any violations**
@@ -1327,10 +1341,12 @@ git commit -m "test(web): axe smoke for Profile + Preferences sections (light + 
 ### Task 7: "Account settings" link in the user menu
 
 **Files:**
+
 - Modify: `apps/web/src/app/TopBar.tsx`
 - Test: `apps/web/src/app/TopBar.test.tsx` (new)
 
 **Interfaces:**
+
 - Consumes: `Link` from react-router-dom; the `profile` section id from Task 5.
 - Produces: a `sb-usermenu__panel` link "Account settings" → `/settings?section=profile`.
 
@@ -1398,12 +1414,9 @@ In `apps/web/src/app/TopBar.tsx`: add `Link` to the react-router-dom import
 `sb-usermenu__panel` div, insert between the name/email block and the Sign out button:
 
 ```tsx
-        <Link
-          to="/settings?section=profile"
-          className="sb-btn sb-btn--ghost sb-usermenu__settings"
-        >
-          Account settings
-        </Link>
+<Link to="/settings?section=profile" className="sb-btn sb-btn--ghost sb-usermenu__settings">
+  Account settings
+</Link>
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -1424,19 +1437,23 @@ git commit -m "feat(web): Account settings link in the user menu"
 ### Task 8: Full verification, browser check, status
 
 **Files:**
+
 - Modify: `D:/CODE/NEW/close-clone/STATUS.md` (append one line to the current-state notes)
 
 - [ ] **Step 1: Full gates**
 
 Run (from `apps/web`):
+
 ```bash
 pnpm test && pnpm typecheck && pnpm lint && pnpm build
 ```
+
 Expected: all green. Fix anything red before proceeding — no green, no done (repo golden rule).
 
 - [ ] **Step 2: Real-browser check (mock mode)**
 
 Run `pnpm dev` (from `apps/web`), open the app, sign in via dev login, then verify:
+
 1. `/settings` lands on Profile; sub-rail shows Profile, Preferences, Users, Custom fields, Templates & snippets, Compliance, About.
 2. Edit display name → Save profile → toast; top-bar chip + initials update; navigate away and back — the change survives (route changes; a reload resets the in-memory demo store, which is the existing demo rule).
 3. Preferences: pick Dark → instant theme change, reload → no flash, still dark; flip Daily email digest; enable Notification quiet hours → time fields appear and edit cleanly.

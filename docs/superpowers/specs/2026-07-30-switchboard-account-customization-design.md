@@ -10,8 +10,9 @@ Switchboard is an internal, single-tenant, SSO-gated, communication-first CRM (R
 react-router 6 + TanStack Query 5, Vite, MSW mock layer; design system "Operator Grid",
 dense and achromatic). The single `/settings` route (`src/app/AppRoutes.tsx`) hosts an
 admin/org console addressed by `?section=` (`src/features/admin/settings/AdminSettingsPage.tsx`
-+ `SettingsNav.tsx`), with five sections: users (read-only), custom-fields, templates,
-compliance, about.
+
+- `SettingsNav.tsx`), with five sections: users (read-only), custom-fields, templates,
+  compliance, about.
 
 The audit (2026-07-30) found **almost no personal account-customization surface**: the only
 per-user preference in the product is the theme toggle (`src/theme/theme.ts`,
@@ -27,20 +28,20 @@ The portfolio-wide baseline every app should offer (adapted per product): editab
 relevant, timezone/locale), account actions (sign-out, connected Google account, export my
 data, delete account), and — multi-user apps — workspace name + member/role management.
 
-| Baseline item | Switchboard today | Verdict |
-|---|---|---|
-| Editable display name | None — name shown read-only in `UserMenu` | **Gap** |
-| Avatar | Generated initials only (`initials()` in `src/lib/format.ts`, `.sb-avatar`); no upload | **Has (by design)** — initials are the Operator Grid avatar; no image upload will be added (D-A3) |
-| Theme preference | Full: light/dark/system, persisted, anti-flash (`src/theme/*`) — but only a cycling icon button, no labeled control in settings | **Has** (surface gap: no settings control) |
-| Notification toggles + quiet hours | None per-user. Org quiet hours exist only as a read-only compliance rail (`ComplianceSection.tsx`) | **Gap** |
-| Timezone | In the data model (`User.timezone`), zero UI | **Gap** |
-| Locale | None | **Non-goal** — repo law: internal, US/Canada, English, "no i18n" (`CLAUDE.md` §4) |
-| Sign-out | Yes — `UserMenu` → `useAuth().logout()`, kills server session in real mode | **Has** |
-| Connected Google account | N/A — real mode is company-OIDC SSO only (`SsoLoginPage.tsx`); no per-provider linking | **Non-goal** (SSO identity shown read-only instead, D-A5) |
-| Export my data | None | **Gap** (closed minimally, D-A6) |
-| Delete account | None; SSO copy references admin-side deactivation | **Non-goal** — IdP/admin owns lifecycle (D-A7); we ship the pointer copy |
-| Workspace name | None (product brand fixed in top bar) | **Non-goal** — single-tenant internal tool (D-A8) |
-| Member/role management | Read-only `UsersSection.tsx`; roles from directory groups | **Has (read-only, by design)** — write mgmt stays in the IdP (D-A8) |
+| Baseline item                      | Switchboard today                                                                                                               | Verdict                                                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Editable display name              | None — name shown read-only in `UserMenu`                                                                                       | **Gap**                                                                                           |
+| Avatar                             | Generated initials only (`initials()` in `src/lib/format.ts`, `.sb-avatar`); no upload                                          | **Has (by design)** — initials are the Operator Grid avatar; no image upload will be added (D-A3) |
+| Theme preference                   | Full: light/dark/system, persisted, anti-flash (`src/theme/*`) — but only a cycling icon button, no labeled control in settings | **Has** (surface gap: no settings control)                                                        |
+| Notification toggles + quiet hours | None per-user. Org quiet hours exist only as a read-only compliance rail (`ComplianceSection.tsx`)                              | **Gap**                                                                                           |
+| Timezone                           | In the data model (`User.timezone`), zero UI                                                                                    | **Gap**                                                                                           |
+| Locale                             | None                                                                                                                            | **Non-goal** — repo law: internal, US/Canada, English, "no i18n" (`CLAUDE.md` §4)                 |
+| Sign-out                           | Yes — `UserMenu` → `useAuth().logout()`, kills server session in real mode                                                      | **Has**                                                                                           |
+| Connected Google account           | N/A — real mode is company-OIDC SSO only (`SsoLoginPage.tsx`); no per-provider linking                                          | **Non-goal** (SSO identity shown read-only instead, D-A5)                                         |
+| Export my data                     | None                                                                                                                            | **Gap** (closed minimally, D-A6)                                                                  |
+| Delete account                     | None; SSO copy references admin-side deactivation                                                                               | **Non-goal** — IdP/admin owns lifecycle (D-A7); we ship the pointer copy                          |
+| Workspace name                     | None (product brand fixed in top bar)                                                                                           | **Non-goal** — single-tenant internal tool (D-A8)                                                 |
+| Member/role management             | Read-only `UsersSection.tsx`; roles from directory groups                                                                       | **Has (read-only, by design)** — write mgmt stays in the IdP (D-A8)                               |
 
 ## 3. Goals
 
@@ -68,7 +69,7 @@ data, delete account), and — multi-user apps — workspace name + member/role 
 - **Workspace rename, member invite/remove, role editing** — single-tenant; directory-managed.
 - **Any change to compliance rails** — recording stays locked (I-REC), honor-unsubscribe and
   outbound SMS quiet hours stay always-on (I-QUIET), only the daily send cap remains
-  editable. Personal notification quiet hours are a *different thing* and the copy must say
+  editable. Personal notification quiet hours are a _different thing_ and the copy must say
   so (see §8).
 - **Real-API (Fastify) implementation** — this iteration ships the web surface + MSW mock
   parity + the contract entry. The `apps/api` routes are a recorded follow-up (D-A10).
@@ -99,12 +100,12 @@ data, delete account), and — multi-user apps — workspace name + member/role 
   says "contact an admin".
 - **D-A8 — No workspace rename or member/role write UI.** `UsersSection` stays read-only.
 - **D-A9 — Persistence split.**
-  - *Server (mock parity now, real later):* profile (`PATCH /users/me` — `{name?, timezone?}`)
+  - _Server (mock parity now, real later):_ profile (`PATCH /users/me` — `{name?, timezone?}`)
     and notification prefs (`GET`/`PATCH /users/me/preferences`). Mock store lives in
     `adminStore` (in-memory, reset-able), handlers in `adminHandlers.ts`; "me" resolves via
     the mock auth blob (`readStoredUser()`, `src/auth/auth.ts`) exactly as the rest of mock
     identity does. Real mode will use the session cookie (server resolves the actor).
-  - *Device-local:* theme stays in localStorage `sb-theme` (a browser-rendering concern;
+  - _Device-local:_ theme stays in localStorage `sb-theme` (a browser-rendering concern;
     per-device is correct and keeps the anti-flash bootstrap in `index.html` working).
 - **D-A10 — Contract handling.** Additive `CONTRACTS.md` entry (version bump + DECISIONS.md
   entry, per repo law: orchestrator-gated) declaring `PATCH /users/me` and
@@ -126,12 +127,12 @@ data, delete account), and — multi-user apps — workspace name + member/role 
 
 New files (all under the existing settings feature — no new feature root):
 
-| File | Responsibility |
-|---|---|
-| `apps/web/src/features/admin/settings/sections/ProfileSection.tsx` | Profile form (name, timezone), avatar preview, identity block, data export |
-| `apps/web/src/features/admin/settings/sections/PreferencesSection.tsx` | Theme radios + notification prefs |
-| `apps/web/src/features/admin/mocks/accountHandlers.test.ts` | Handler-level TDD for the new endpoints |
-| section tests colocated as `ProfileSection.test.tsx` / `PreferencesSection.test.tsx` | |
+| File                                                                                 | Responsibility                                                             |
+| ------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `apps/web/src/features/admin/settings/sections/ProfileSection.tsx`                   | Profile form (name, timezone), avatar preview, identity block, data export |
+| `apps/web/src/features/admin/settings/sections/PreferencesSection.tsx`               | Theme radios + notification prefs                                          |
+| `apps/web/src/features/admin/mocks/accountHandlers.test.ts`                          | Handler-level TDD for the new endpoints                                    |
+| section tests colocated as `ProfileSection.test.tsx` / `PreferencesSection.test.tsx` |                                                                            |
 
 Modified: `SettingsNav.tsx` (sections + default), `AdminSettingsPage.tsx` (render cases),
 `features/admin/icons.tsx` (ProfileIcon = lucide `CircleUserRound`, PreferencesIcon =
