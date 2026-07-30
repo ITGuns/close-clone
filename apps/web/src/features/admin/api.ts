@@ -4,13 +4,16 @@
  * snippets, sequences, and leads-mutation calls this feature needs. Reference
  * lookups (users, lead-statuses) are reused from api/reference.ts.
  */
-import type { Lead, OrgSettings, Snippet, Template } from '@switchboard/shared';
+import type { Lead, OrgSettings, Snippet, Template, User } from '@switchboard/shared';
 import { apiRequest } from '../../api/client.ts';
 import type {
   CreateCustomFieldInput,
   CustomFieldRow,
   EnrollResult,
+  MePatch,
   SequenceWithCount,
+  UserPreferences,
+  UserPreferencesPatch,
 } from './types.ts';
 
 // ── Bulk: leads mutation + enroll ──────────────────────────────────────────────
@@ -93,4 +96,19 @@ export function updateDailySendCap(dailySendCap: number): Promise<OrgSettings> {
     method: 'PATCH',
     body: { dailySendCap },
   });
+}
+
+// ── Account: self-service profile + notification preferences (C7 v1.3.7) ─────
+
+/** PATCH /users/me — display name / timezone only; identity is IdP-owned. */
+export function patchMe(patch: MePatch): Promise<User> {
+  return apiRequest<User>('/users/me', { method: 'PATCH', body: patch });
+}
+
+export function getMyPreferences(signal?: AbortSignal): Promise<UserPreferences> {
+  return apiRequest<UserPreferences>('/users/me/preferences', signal ? { signal } : {});
+}
+
+export function patchMyPreferences(patch: UserPreferencesPatch): Promise<UserPreferences> {
+  return apiRequest<UserPreferences>('/users/me/preferences', { method: 'PATCH', body: patch });
 }

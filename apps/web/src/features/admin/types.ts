@@ -81,3 +81,33 @@ export const DNC_REASONS = [
   'Other',
 ] as const;
 export type DncReason = (typeof DNC_REASONS)[number];
+
+// ── Account: self-service profile + notification preferences (C7 v1.3.7) ─────
+
+/** Personal notification quiet hours — NOT the I-QUIET compliance rail. */
+export interface QuietHoursPref {
+  enabled: boolean;
+  /** 24h "HH:MM" */
+  start: string;
+  /** 24h "HH:MM" */
+  end: string;
+}
+
+export interface UserPreferences {
+  desktopNotifications: boolean;
+  emailDigest: boolean;
+  quietHours: QuietHoursPref;
+  updatedAt: string;
+}
+
+export interface UserPreferencesPatch {
+  desktopNotifications?: boolean;
+  emailDigest?: boolean;
+  quietHours?: QuietHoursPref;
+}
+
+/** The only IdP-independent identity fields (D-A4). */
+export interface MePatch {
+  name?: string;
+  timezone?: string;
+}

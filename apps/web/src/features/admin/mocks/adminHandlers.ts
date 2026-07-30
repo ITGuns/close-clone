@@ -13,8 +13,9 @@
  *   - enabling call recording via the API is refused — legal sign-off only (I-REC).
  */
 import { http, HttpResponse } from 'msw';
-import type { Lead } from '@switchboard/shared';
+import type { Lead, User } from '@switchboard/shared';
 import { customFieldTypeValues } from '@switchboard/shared';
+import { readStoredUser } from '../../../auth/auth.ts';
 import { db } from '../../../mocks/fixtures.ts';
 import type { CustomFieldRow, EnrollResult } from '../types.ts';
 import { adminStore } from './adminStore.ts';
@@ -41,6 +42,7 @@ async function readJson(request: Request): Promise<Record<string, unknown> | nul
 }
 
 const SNAKE_CASE = /^[a-z][a-z0-9_]*$/;
+const HHMM = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 const nowIso = (): string => new Date().toISOString();
 
 export const adminHandlers = [
@@ -257,5 +259,85 @@ export const adminHandlers = [
     }
     adminStore.orgSettings.updatedAt = nowIso();
     return HttpResponse.json(adminStore.orgSettings);
+  }),
+
+  // ── Account: self-service profile (C7 v1.3.7 PATCH /users/me) ──────────────
+  // "Me" is the mock auth blob — the same identity source the dev-login flow
+  // uses. Real mode resolves the actor from the session cookie server-side.
+  http.patch(api('/users/me'), async ({ request }) => {
+    const me = readStoredUser();
+    if (!me) return errorJson(401, 'UNAUTHENTICATED', 'No signed-in user');
+    const body = await readJson(request);
+    if (!body) return errorJson(400, 'VALIDATION_FAILED', 'Invalid body');
+
+    const row = db.users.find((u) => u.id === me.id) ?? null;
+    const next: User = { ...(row ?? me) };
+    if (body.name !== undefined) {
+      const name = typeof body.name === 'string' ? body.name.trim() : '';
+      if (name.length === 0 || name.length > 80) {
+        return errorJson(400, 'VALIDATION_FAILED', 'name must be 1–80 characters', {
+          field: 'name',
+        });
+      }
+      next.name = name;
+    }
+    if (body.timezone !== undefined) {
+      if (typeof body.timezone !== 'string' || body.timezone.trim().length === 0) {
+        return errorJson(400, 'VALIDATION_FAILED', 'timezone must be an IANA zone id', {
+          field: 'timezone',
+        });
+      }
+      next.timezone = body.timezone;
+    }
+    next.updatedAt = nowIso();
+    if (row) Object.assign(row, next);
+    return HttpResponse.json(next satisfies User);
+  }),
+
+  // ── Account: notification preferences (C7 v1.3.7 /users/me/preferences) ────
+  // Personal notification quiet hours only — the I-QUIET outbound rail is a
+  // different, engine-enforced thing and is not touched here.
+  http.get(api('/users/me/preferences'), () => HttpResponse.json(adminStore.preferences)),
+  http.patch(api('/users/me/preferences'), async ({ request }) => {
+    const body = await readJson(request);
+    if (!body) return errorJson(400, 'VALIDATION_FAILED', 'Invalid body');
+    const prefs = adminStore.preferences;
+    if (body.desktopNotifications !== undefined) {
+      if (typeof body.desktopNotifications !== 'boolean') {
+        return errorJson(400, 'VALIDATION_FAILED', 'desktopNotifications must be a boolean', {
+          field: 'desktopNotifications',
+        });
+      }
+      prefs.desktopNotifications = body.desktopNotifications;
+    }
+    if (body.emailDigest !== undefined) {
+      if (typeof body.emailDigest !== 'boolean') {
+        return errorJson(400, 'VALIDATION_FAILED', 'emailDigest must be a boolean', {
+          field: 'emailDigest',
+        });
+      }
+      prefs.emailDigest = body.emailDigest;
+    }
+    if (body.quietHours !== undefined) {
+      const qh = body.quietHours;
+      if (
+        !isRecord(qh) ||
+        typeof qh.enabled !== 'boolean' ||
+        typeof qh.start !== 'string' ||
+        typeof qh.end !== 'string' ||
+        !HHMM.test(qh.start) ||
+        !HHMM.test(qh.end)
+      ) {
+        return errorJson(
+          400,
+          'VALIDATION_FAILED',
+          'quietHours must be { enabled, start "HH:MM", end "HH:MM" }',
+          { field: 'quietHours' },
+        );
+      }
+      prefs.quietHours = { enabled: qh.enabled, start: qh.start, end: qh.end };
+    }
+    prefs.updatedAt = nowIso();
+    return HttpResponse.json(prefs);
   }),
 ];
