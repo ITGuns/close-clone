@@ -5,6 +5,11 @@ import { http, HttpResponse } from 'msw';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { ToastProvider } from '../../../feedback/ToastProvider.tsx';
+import { ThemeProvider } from '../../../theme/ThemeProvider.tsx';
+import { AuthProvider } from '../../../auth/AuthProvider.tsx';
+import { storeUser } from '../../../auth/auth.ts';
+import type { User } from '@switchboard/shared';
+import { db } from '../../../mocks/fixtures.ts';
 import { server } from '../../../mocks/server.ts';
 import { adminHandlers } from '../mocks/adminHandlers.ts';
 import { adminStore, resetAdminStore } from '../mocks/adminStore.ts';
@@ -17,14 +22,26 @@ import { AdminSettingsPage } from './AdminSettingsPage.tsx';
  * test.
  */
 
-function renderSettings(section = 'users'): void {
+function fixtureUser(): User {
+  const u = db.users[0];
+  if (!u) throw new Error('fixture users missing');
+  return u;
+}
+
+function renderSettings(section?: string): void {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
       <ToastProvider ttl={0}>
-        <MemoryRouter initialEntries={[`/settings?section=${section}`]}>
-          <AdminSettingsPage />
-        </MemoryRouter>
+        <ThemeProvider>
+          <AuthProvider>
+            <MemoryRouter
+              initialEntries={[section ? `/settings?section=${section}` : '/settings']}
+            >
+              <AdminSettingsPage />
+            </MemoryRouter>
+          </AuthProvider>
+        </ThemeProvider>
       </ToastProvider>
     </QueryClientProvider>,
   );
@@ -33,13 +50,17 @@ function renderSettings(section = 'users'): void {
 beforeEach(() => {
   resetAdminStore();
   server.use(...adminHandlers);
+  storeUser(fixtureUser());
 });
 afterEach(() => {
+  storeUser(null);
+  localStorage.removeItem('sb-theme');
+  document.documentElement.removeAttribute('data-theme');
   cleanup();
 });
 
 describe('navigation', () => {
-  test('renders Users by default and switches sections via the sub-rail', async () => {
+  test('renders the addressed section and switches sections via the sub-rail', async () => {
     const user = userEvent.setup();
     renderSettings('users');
 
@@ -55,6 +76,18 @@ describe('navigation', () => {
       'href',
       '/welcome',
     );
+  });
+
+  test('defaults to Profile (personal-first) and reaches Preferences via the sub-rail', async () => {
+    const user = userEvent.setup();
+    renderSettings();
+
+    await screen.findByRole('heading', { name: 'Profile', level: 1 });
+    expect(screen.getByLabelText('Display name')).toHaveValue(fixtureUser().name);
+
+    await user.click(screen.getByRole('link', { name: 'Preferences' }));
+    await screen.findByRole('heading', { name: 'Preferences', level: 1 });
+    await screen.findByRole('switch', { name: 'Desktop notifications' });
   });
 });
 
