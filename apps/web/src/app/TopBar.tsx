@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { JSX, RefObject } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { User } from '@switchboard/shared';
 import { initials } from '../lib/format.ts';
 import { Kbd } from '../ui/index.ts';
@@ -115,6 +115,12 @@ function UserMenu({ user, onSignOut }: { user: User; onSignOut: () => void }): J
           <div className="sb-usermenu__meta-name">{user.name}</div>
           <div className="sb-usermenu__meta-email">{user.email}</div>
         </div>
+        <Link
+          to="/settings?section=profile"
+          className="sb-btn sb-btn--ghost sb-usermenu__settings"
+        >
+          Account settings
+        </Link>
         <button
           type="button"
           className="sb-btn sb-btn--ghost sb-usermenu__signout"
