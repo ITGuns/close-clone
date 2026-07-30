@@ -6,11 +6,13 @@ import type { CSSProperties, RefObject } from 'react';
  * (Tooltip, Menu). Fixed-position coordinates from the anchor's rect, a
  * vertical flip when the preferred side doesn't fit, a horizontal clamp to
  * the viewport, and re-position on scroll/resize while open. Deliberately
- * not a Floating UI replacement — two sides, three alignments, one offset.
+ * not a Floating UI replacement — four sides, three alignments, one offset.
  */
 
+export type FloatingSide = 'top' | 'bottom' | 'left' | 'right';
+
 export interface FloatingOptions {
-  side?: 'top' | 'bottom';
+  side?: FloatingSide;
   align?: 'start' | 'center' | 'end';
   /** Gap between anchor and panel, px. */
   offset?: number;
@@ -20,12 +22,17 @@ export interface FloatingPosition {
   style: CSSProperties;
   anchorWidth: number;
   /** Side actually used after flipping — drives transform-origin via data-side. */
-  side: 'top' | 'bottom';
+  side: FloatingSide;
 }
 
 const VIEWPORT_MARGIN = 8;
 
-function compute(
+/**
+ * Pure placement: exported for unit tests and for callers that need a one-shot
+ * measurement. Vertical sides flip vertically, horizontal sides horizontally;
+ * both axes clamp to the viewport margin afterwards.
+ */
+export function computeFloatingPosition(
   anchor: HTMLElement,
   panel: HTMLElement,
   { side = 'bottom', align = 'start', offset = 4 }: FloatingOptions,
@@ -40,22 +47,35 @@ function compute(
     if (a.bottom + offset + p.height <= window.innerHeight - VIEWPORT_MARGIN) {
       actualSide = 'bottom';
     }
+  } else if (side === 'right' && a.right + offset + p.width > window.innerWidth - VIEWPORT_MARGIN) {
+    if (a.left - offset - p.width >= VIEWPORT_MARGIN) actualSide = 'left';
+  } else if (side === 'left' && a.left - offset - p.width < VIEWPORT_MARGIN) {
+    if (a.right + offset + p.width <= window.innerWidth - VIEWPORT_MARGIN) {
+      actualSide = 'right';
+    }
   }
-  const top = actualSide === 'bottom' ? a.bottom + offset : a.top - offset - p.height;
 
-  let left = a.left;
-  if (align === 'center') left = a.left + a.width / 2 - p.width / 2;
-  else if (align === 'end') left = a.right - p.width;
+  let top: number;
+  let left: number;
+  if (actualSide === 'top' || actualSide === 'bottom') {
+    top = actualSide === 'bottom' ? a.bottom + offset : a.top - offset - p.height;
+    left = a.left;
+    if (align === 'center') left = a.left + a.width / 2 - p.width / 2;
+    else if (align === 'end') left = a.right - p.width;
+  } else {
+    left = actualSide === 'right' ? a.right + offset : a.left - offset - p.width;
+    top = a.top;
+    if (align === 'center') top = a.top + a.height / 2 - p.height / 2;
+    else if (align === 'end') top = a.bottom - p.height;
+  }
+
   const maxLeft = window.innerWidth - VIEWPORT_MARGIN - p.width;
   left = Math.min(Math.max(left, VIEWPORT_MARGIN), Math.max(maxLeft, VIEWPORT_MARGIN));
-
-  // Vertical clamp: a panel taller than the remaining space must not run off
-  // the viewport (the flip above already picked the roomier side).
   const maxTop = window.innerHeight - VIEWPORT_MARGIN - p.height;
-  const clampedTop = Math.min(Math.max(top, VIEWPORT_MARGIN), Math.max(maxTop, VIEWPORT_MARGIN));
+  top = Math.min(Math.max(top, VIEWPORT_MARGIN), Math.max(maxTop, VIEWPORT_MARGIN));
 
   return {
-    style: { position: 'fixed', top: Math.round(clampedTop), left: Math.round(left) },
+    style: { position: 'fixed', top: Math.round(top), left: Math.round(left) },
     anchorWidth: Math.round(a.width),
     side: actualSide,
   };
@@ -85,7 +105,7 @@ export function useFloatingPosition(
       const anchor = anchorRef.current;
       const panel = panelRef.current;
       if (!anchor || !panel) return;
-      setPosition(compute(anchor, panel, { side, align, offset }));
+      setPosition(computeFloatingPosition(anchor, panel, { side, align, offset }));
     };
     update();
     window.addEventListener('scroll', update, true);

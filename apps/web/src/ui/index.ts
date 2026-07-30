@@ -6,6 +6,7 @@ export { Textarea, type TextareaProps } from './Textarea.tsx';
 export { Field, type FieldProps } from './Field.tsx';
 export { Checkbox, type CheckboxProps } from './Checkbox.tsx';
 export { Switch, type SwitchProps } from './Switch.tsx';
+export { Coachmark, type CoachmarkProps } from './Coachmark.tsx';
 export { Kbd } from './Kbd.tsx';
 export { StatusPill, STATUS_TONES, type StatusTone } from './StatusPill.tsx';
 export {

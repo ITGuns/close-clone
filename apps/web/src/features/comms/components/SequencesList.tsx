@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { JSX } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import {
   Button,
@@ -102,7 +102,12 @@ export function SequencesList(): JSX.Element {
       {sequences.length === 0 ? (
         <EmptyState
           title="No sequences yet"
-          description="Create a sequence to start automating outreach."
+          description="Sequences automate multi-step outreach; a reply pauses everything."
+          actions={
+            <Link className="sb-btn" to="/help">
+              How sequences work
+            </Link>
+          }
         />
       ) : (
         <ul className="seq-list" aria-label="Sequences">

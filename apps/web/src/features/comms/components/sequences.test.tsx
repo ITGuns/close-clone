@@ -71,6 +71,16 @@ describe('SequencesList', () => {
     // Archived sequence is still listed.
     expect(screen.getByRole('button', { name: /Win-back 2024/ })).toBeInTheDocument();
   });
+
+  test('empty state routes to the sequences primer on /help', async () => {
+    server.use(http.get(api('/sequences'), () => HttpResponse.json([])));
+    renderComms(<SequencesList />, '/sequences');
+    await screen.findByText('No sequences yet');
+    expect(screen.getByRole('link', { name: 'How sequences work' })).toHaveAttribute(
+      'href',
+      '/help',
+    );
+  });
 });
 
 describe('SequenceDetail — compliance + ladder', () => {

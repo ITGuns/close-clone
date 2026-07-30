@@ -18,3 +18,6 @@ apps/api/src/db/migrations/meta/
 e2e/.auth/
 e2e/playwright-report/
 e2e/test-results/
+
+# Local QA scratch artifacts (untracked; never format-gate these)
+.qa-scratch/

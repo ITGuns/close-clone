@@ -13,6 +13,9 @@ import { ADMIN_USER } from './support/app';
 const STORAGE_STATE = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.auth', 'user.json');
 
 setup('authenticate as the admin fixture user', async ({ page }) => {
+  // Authed specs never meet the first-run tour: the suppress key is set before
+  // any page load and is captured into the shared storageState.
+  await page.addInitScript(() => window.localStorage.setItem('sb-tour-suppress', '1'));
   await page.goto('/welcome');
   await expect(page.getByRole('heading', { name: /Pick up the line/ })).toBeVisible();
 
