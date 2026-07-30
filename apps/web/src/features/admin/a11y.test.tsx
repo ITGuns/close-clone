@@ -5,8 +5,11 @@ import userEvent from '@testing-library/user-event';
 import * as axe from 'axe-core';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import type { Lead } from '@switchboard/shared';
+import type { Lead, User } from '@switchboard/shared';
 import { ToastProvider } from '../../feedback/ToastProvider.tsx';
+import { ThemeProvider } from '../../theme/ThemeProvider.tsx';
+import { AuthProvider } from '../../auth/AuthProvider.tsx';
+import { storeUser } from '../../auth/auth.ts';
 import { db } from '../../mocks/fixtures.ts';
 import { server } from '../../mocks/server.ts';
 import { adminHandlers } from './mocks/adminHandlers.ts';
@@ -82,6 +85,40 @@ describe('settings — axe', () => {
       await screen.findByLabelText('Daily send cap');
       await expectNoSeriousViolations(container);
       unmount();
+    }
+  });
+
+  test('the profile and preferences sections have no serious/critical violations (light + dark)', async () => {
+    const u: User | undefined = db.users[0];
+    if (!u) throw new Error('fixture users missing');
+    storeUser(u);
+    try {
+      for (const section of ['profile', 'preferences'] as const) {
+        for (const theme of ['light', 'dark'] as const) {
+          localStorage.setItem('sb-theme', theme);
+          const { container, unmount } = render(
+            <Providers>
+              <ThemeProvider>
+                <AuthProvider>
+                  <MemoryRouter initialEntries={[`/settings?section=${section}`]}>
+                    <AdminSettingsPage />
+                  </MemoryRouter>
+                </AuthProvider>
+              </ThemeProvider>
+            </Providers>,
+          );
+          if (section === 'profile') {
+            await screen.findByLabelText('Display name');
+          } else {
+            await screen.findByRole('switch', { name: 'Desktop notifications' });
+          }
+          await expectNoSeriousViolations(container);
+          unmount();
+        }
+      }
+    } finally {
+      storeUser(null);
+      localStorage.removeItem('sb-theme');
     }
   });
 });
