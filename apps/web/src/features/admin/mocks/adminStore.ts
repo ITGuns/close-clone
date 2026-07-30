@@ -13,7 +13,7 @@
  */
 import type { OrgSettings, Snippet, Template, User } from '@switchboard/shared';
 import { db } from '../../../mocks/fixtures.ts';
-import type { CustomFieldRow, SequenceWithCount } from '../types.ts';
+import type { CustomFieldRow, SequenceWithCount, UserPreferences } from '../types.ts';
 
 const FIXED_NOW = '2026-07-15T17:00:00.000Z';
 
@@ -227,6 +227,15 @@ function seedSequences(): SequenceWithCount[] {
   ];
 }
 
+function seedMyPreferences(): UserPreferences {
+  return {
+    desktopNotifications: true,
+    emailDigest: false,
+    quietHours: { enabled: false, start: '20:00', end: '08:00' },
+    updatedAt: FIXED_NOW,
+  };
+}
+
 // ── The mutable store ─────────────────────────────────────────────────────────
 
 export interface AdminStore {
@@ -235,6 +244,7 @@ export interface AdminStore {
   snippets: Snippet[];
   orgSettings: OrgSettings;
   sequences: SequenceWithCount[];
+  preferences: UserPreferences;
 }
 
 function build(): AdminStore {
@@ -244,6 +254,7 @@ function build(): AdminStore {
     snippets: seedSnippets(),
     orgSettings: seedOrgSettings(),
     sequences: seedSequences(),
+    preferences: seedMyPreferences(),
   };
 }
 
@@ -258,4 +269,5 @@ export function resetAdminStore(): void {
   adminStore.snippets = fresh.snippets;
   adminStore.orgSettings = fresh.orgSettings;
   adminStore.sequences = fresh.sequences;
+  adminStore.preferences = fresh.preferences;
 }

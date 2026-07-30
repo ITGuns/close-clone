@@ -6,6 +6,7 @@ import {
   Check,
   ChevronRight,
   CircleDot,
+  CircleUserRound,
   Download,
   ExternalLink,
   FileText,
@@ -16,6 +17,7 @@ import {
   Lock,
   Pencil,
   Plus,
+  Settings2,
   ShieldCheck,
   Signature,
   SlidersHorizontal,
@@ -60,6 +62,8 @@ export const DncIcon = toIcon(Ban);
 export const DncClearIcon = toIcon(ShieldCheck);
 
 // Settings nav + sections
+export const ProfileIcon = toIcon(CircleUserRound);
+export const PreferencesIcon = toIcon(Settings2);
 export const UsersIcon = toIcon(Users);
 export const CustomFieldsIcon = toIcon(SlidersHorizontal);
 export const TemplatesIcon = toIcon(FileText);

@@ -1,5 +1,9 @@
 # STATUS — Switchboard build
 
+## ACCOUNT-CUSTOMIZATION PARITY (2026-07-31, D-062 · CONTRACTS v1.3.7)
+
+- Account-customization parity (2026-07-30): personal Profile + Preferences sections on /settings (display name, timezone, initials avatar, SSO identity block, data export; theme radios, notification toggles + personal quiet hours), mock-API parity via adminStore/adminHandlers, C7 v1.3.7/D-062. Real Fastify routes for `/users/me*` deferred to the next api iteration (spec: docs/superpowers/specs/2026-07-30-switchboard-account-customization-design.md).
+
 ## SELF-SERVE ONBOARDING + GUIDED TOUR (2026-07-30, D-064 · CONTRACTS unchanged)
 
 Shipped a first-run guided tour and real empty-state CTAs — all client-only, **zero CONTRACTS/API/auth change** and zero new dependencies. A `TourProvider` mounted in `AppShell` auto-opens once per user (localStorage `sb-tour-v1:<userId>`, kill switch `sb-tour-suppress`), rendering `Modal` bookends and a new non-modal `Coachmark` primitive (built on an extended `ui/floating.ts` with left/right sides) anchored to `data-tour` attributes on the LeftRail/TopBar. Six steps, keyboard-first (Arrow/Enter advance, Escape dismisses, 0ms instant advances, reduced-motion honored), dismissible + replayable from **Support & FAQs**. Empty states got honest CTAs: Leads → the CSV import wizard, Sequences → the `/help` primer (no create-UI exists, so no fake CTA). The suppress kill switch is seeded in `src/test/setup.ts` + `e2e/tests/auth.setup.ts` + `rep-loop.spec.ts`, so none of the ~2,600 pre-existing tests ever meets the tour. Because four jsdom suites (a11y, AppRoutes, keyboardShell, rail) call `localStorage.clear()` in `beforeEach` — which would wipe that seed and let the tour auto-open into a shell test — `setup.ts` also patches `Storage.prototype.clear` to re-seed the suppress flag on every localStorage clear; the tour's own tests use targeted `removeItem`, so their auto-open path is unaffected.

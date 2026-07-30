@@ -6,6 +6,8 @@ import {
   ComplianceIcon,
   CustomFieldsIcon,
   type IconProps,
+  PreferencesIcon,
+  ProfileIcon,
   TemplatesIcon,
   UsersIcon,
 } from '../icons.tsx';
@@ -24,6 +26,8 @@ export interface SettingsSectionMeta {
 }
 
 export const SETTINGS_SECTIONS: readonly SettingsSectionMeta[] = [
+  { id: 'profile', label: 'Profile', icon: ProfileIcon },
+  { id: 'preferences', label: 'Preferences', icon: PreferencesIcon },
   { id: 'users', label: 'Users', icon: UsersIcon },
   { id: 'custom-fields', label: 'Custom fields', icon: CustomFieldsIcon },
   { id: 'templates', label: 'Templates & snippets', icon: TemplatesIcon },
@@ -31,7 +35,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionMeta[] = [
   { id: 'about', label: 'About', icon: AboutIcon },
 ];
 
-export const DEFAULT_SECTION = 'users';
+export const DEFAULT_SECTION = 'profile';
 
 /** Resolve a `?section=` value to a known section id, falling back to default. */
 export function resolveSection(raw: string | null): string {

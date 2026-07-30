@@ -7,6 +7,8 @@ import { CustomFieldsSection } from './sections/CustomFieldsSection.tsx';
 import { TemplatesSection } from './sections/TemplatesSection.tsx';
 import { ComplianceSection } from './sections/ComplianceSection.tsx';
 import { AboutSection } from './sections/AboutSection.tsx';
+import { ProfileSection } from './sections/ProfileSection.tsx';
+import { PreferencesSection } from './sections/PreferencesSection.tsx';
 
 /*
  * The /settings route surface (replaces the placeholder). A left sub-rail in the
@@ -18,6 +20,8 @@ import { AboutSection } from './sections/AboutSection.tsx';
 
 function renderSection(section: string): JSX.Element {
   switch (section) {
+    case 'users':
+      return <UsersSection />;
     case 'custom-fields':
       return <CustomFieldsSection />;
     case 'templates':
@@ -26,9 +30,11 @@ function renderSection(section: string): JSX.Element {
       return <ComplianceSection />;
     case 'about':
       return <AboutSection />;
-    case 'users':
+    case 'preferences':
+      return <PreferencesSection />;
+    case 'profile':
     default:
-      return <UsersSection />;
+      return <ProfileSection />;
   }
 }
 
