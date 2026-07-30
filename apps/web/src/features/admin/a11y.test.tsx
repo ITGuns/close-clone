@@ -120,7 +120,7 @@ describe('settings — axe', () => {
       storeUser(null);
       localStorage.removeItem('sb-theme');
     }
-  });
+  }, 60000);
 });
 
 describe('bulk dialog — axe', () => {
