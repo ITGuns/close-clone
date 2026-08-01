@@ -19,7 +19,9 @@ export interface ScrollBuildResult<T extends HTMLElement> {
   lit: number;
 }
 
-export function useScrollBuild<T extends HTMLElement = HTMLElement>(count: number): ScrollBuildResult<T> {
+export function useScrollBuild<T extends HTMLElement = HTMLElement>(
+  count: number,
+): ScrollBuildResult<T> {
   const ref = useRef<T | null>(null);
   const [lit, setLit] = useState<number>(() => (prefersReducedMotion() ? count : 0));
 

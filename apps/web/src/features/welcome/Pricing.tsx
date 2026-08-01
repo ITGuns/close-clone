@@ -47,7 +47,11 @@ export function Pricing(): JSX.Element {
         {PRICING_TIERS.map((tier) => {
           const amount = annual ? tier.annual : tier.monthly;
           return (
-            <li key={tier.id} className="sb-welcome__price" data-featured={tier.featured || undefined}>
+            <li
+              key={tier.id}
+              className="sb-welcome__price"
+              data-featured={tier.featured || undefined}
+            >
               {tier.featured ? <span className="sb-welcome__price-badge">Most teams</span> : null}
               <p className="sb-welcome__price-name">{tier.name}</p>
               <p className="sb-welcome__price-value">

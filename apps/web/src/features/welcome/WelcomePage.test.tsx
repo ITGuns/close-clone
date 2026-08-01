@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { RenderResult } from '@testing-library/react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import * as axe from 'axe-core';
 import { AppProviders } from '../../app/AppProviders.tsx';
@@ -70,13 +70,15 @@ afterEach(cleanup);
 describe('WelcomePage — hero wall + nav menu + accounts band', () => {
   test('nav anchors point at real sections on the page', () => {
     const { container } = renderWelcome();
+    // Scope to the landing nav — the footer's Product column links share names.
+    const nav = screen.getByRole('navigation', { name: 'Landing' });
     for (const [name, target] of [
       ['Features', 'welcome-acts'],
       ['Shortcuts', 'welcome-keys'],
       ['Pricing', 'welcome-pricing'],
       ['FAQ', 'welcome-faq'],
     ] as const) {
-      const link = screen.getByRole('link', { name });
+      const link = within(nav).getByRole('link', { name });
       expect(link).toHaveAttribute('href', `#${target}`);
       expect(container.querySelector(`#${target}`)).not.toBeNull();
     }

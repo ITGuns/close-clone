@@ -9,6 +9,9 @@ export const WORDMARK = 'Switchboard';
 
 export const NAV_SIGN_IN = 'Sign in · SSO';
 
+/** Both primary CTAs and the nav sign-in route to the dev-login gate. */
+export const LOGIN_PATH = '/login';
+
 export interface NavMenuItem {
   name: string;
   /** In-page anchor — every target is a real section below. */
@@ -121,10 +124,48 @@ export const TRUST_LINE =
 export const FOOTER = {
   cta: 'Open Switchboard',
   note: 'Switchboard is an internal tool for the revenue team. Access is limited to staff accounts through single sign-on.',
+  copyright: '© 2026 Switchboard',
+  fine: 'Internal · SSO-gated · US / Canada',
 } as const;
 
-/** Both primary CTAs and the nav sign-in route to the dev-login gate. */
-export const LOGIN_PATH = '/login';
+export interface FooterLink {
+  name: string;
+  href: string;
+}
+export interface FooterColumn {
+  title: string;
+  links: readonly FooterLink[];
+}
+
+/* Product + Company columns point at real in-page anchors (no dead nav links);
+ * Legal entries are the standard footer placeholders a real deployment fills in. */
+export const FOOTER_COLUMNS: readonly FooterColumn[] = [
+  {
+    title: 'Product',
+    links: [
+      { name: 'The board', href: '#welcome-acts' },
+      { name: 'Shortcuts', href: '#welcome-keys' },
+      { name: 'Pricing', href: '#welcome-pricing' },
+      { name: 'FAQ', href: '#welcome-faq' },
+    ],
+  },
+  {
+    title: 'Access',
+    links: [
+      { name: 'Sign in', href: LOGIN_PATH },
+      { name: 'Contact', href: '#welcome-faq' },
+    ],
+  },
+  {
+    title: 'Legal',
+    links: [
+      { name: 'Privacy', href: '#' },
+      { name: 'Terms', href: '#' },
+      { name: 'DPA', href: '#' },
+      { name: 'Security', href: '#' },
+    ],
+  },
+];
 
 /* ── Pricing ──────────────────────────────────────────────────────────────────
  * Switchboard is single-tenant and internal, so the model is per-seat + a
@@ -228,7 +269,7 @@ export const FAQ_ITEMS: readonly FaqItem[] = [
   },
   {
     q: 'Is it internal-only, or a public product?',
-    a: "Internal and single-tenant by design. It is SSO-gated — your team signs in with your identity provider, and there is no public sign-up. Scope is deliberately narrow: US and Canada, English, no multi-tenancy.",
+    a: 'Internal and single-tenant by design. It is SSO-gated — your team signs in with your identity provider, and there is no public sign-up. Scope is deliberately narrow: US and Canada, English, no multi-tenancy.',
   },
   {
     q: 'How does compliance actually work?',

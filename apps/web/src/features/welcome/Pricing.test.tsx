@@ -34,7 +34,10 @@ describe('Pricing — per-seat tiers for a single-tenant tool', () => {
   test('Enterprise is contact-only, pointing at the FAQ', () => {
     renderPricing();
     expect(screen.getByText(/Let.s talk/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Contact us' })).toHaveAttribute('href', '#welcome-faq');
+    expect(screen.getByRole('link', { name: 'Contact us' })).toHaveAttribute(
+      'href',
+      '#welcome-faq',
+    );
   });
 
   test('both seat plans route to the SSO gate', () => {

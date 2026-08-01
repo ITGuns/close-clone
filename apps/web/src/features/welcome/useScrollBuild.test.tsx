@@ -60,18 +60,16 @@ describe('useScrollBuild — the wall builds under the scroll', () => {
   });
 
   test('lights every row immediately under reduced motion', () => {
-    vi.spyOn(window, 'matchMedia').mockImplementation(
-      (query: string): MediaQueryList => ({
-        matches: query.includes('prefers-reduced-motion'),
-        media: query,
-        onchange: null,
-        addEventListener: () => undefined,
-        removeEventListener: () => undefined,
-        addListener: () => undefined,
-        removeListener: () => undefined,
-        dispatchEvent: () => false,
-      }),
-    );
+    vi.spyOn(window, 'matchMedia').mockImplementation((query: string): MediaQueryList => ({
+      matches: query.includes('prefers-reduced-motion'),
+      media: query,
+      onchange: null,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+      dispatchEvent: () => false,
+    }));
     const { getByTestId } = render(<Probe count={6} />);
     expect(getByTestId('probe')).toHaveAttribute('data-lit', '6');
   });
