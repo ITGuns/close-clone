@@ -14,6 +14,8 @@ import { Hero } from './Hero.tsx';
 import { AccountsBand } from './AccountsBand.tsx';
 import { FeatureActs } from './FeatureActs.tsx';
 import { KeyboardStrip } from './KeyboardStrip.tsx';
+import { Pricing } from './Pricing.tsx';
+import { Faq } from './Faq.tsx';
 import { TrustLine } from './TrustLine.tsx';
 import { FooterCta } from './FooterCta.tsx';
 import { useIgnition } from './useIgnition.ts';
@@ -37,6 +39,8 @@ export function WelcomePage(): JSX.Element {
         <AccountsBand />
         <FeatureActs />
         <KeyboardStrip />
+        <Pricing />
+        <Faq />
       </main>
       <TrustLine />
       <FooterCta />

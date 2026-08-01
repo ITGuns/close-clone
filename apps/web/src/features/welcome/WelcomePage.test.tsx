@@ -73,7 +73,8 @@ describe('WelcomePage — hero wall + nav menu + accounts band', () => {
     for (const [name, target] of [
       ['Features', 'welcome-acts'],
       ['Shortcuts', 'welcome-keys'],
-      ['Compliance', 'welcome-trust'],
+      ['Pricing', 'welcome-pricing'],
+      ['FAQ', 'welcome-faq'],
     ] as const) {
       const link = screen.getByRole('link', { name });
       expect(link).toHaveAttribute('href', `#${target}`);
@@ -141,7 +142,13 @@ describe('WelcomePage — route + content', () => {
     for (const link of openLinks) {
       expect(link).toHaveAttribute('href', '/login');
     }
-    expect(screen.getByRole('link', { name: /sign in · sso/i })).toHaveAttribute('href', '/login');
+    // Every "Sign in · SSO" CTA — nav plus the two per-seat pricing plans — routes
+    // to the same dev-login gate.
+    const signinLinks = screen.getAllByRole('link', { name: /sign in · sso/i });
+    expect(signinLinks).toHaveLength(3); // nav + Team + Scale
+    for (const link of signinLinks) {
+      expect(link).toHaveAttribute('href', '/login');
+    }
   });
 
   test('shows the six state lamps and the three feature acts', () => {
