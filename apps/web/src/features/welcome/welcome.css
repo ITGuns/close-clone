@@ -254,7 +254,12 @@
 .sb-welcome__hero {
   position: relative;
   overflow: hidden;
-  padding: clamp(var(--space-8), 7vw, 96px) var(--space-6) clamp(var(--space-9), 8vw, 104px);
+  /* Pull the hero up under the floating nav (56px pill + its space-4 top margin)
+   * so the etched grid + bloom reach the very top edge — no black gap above the
+   * nav. The nav (sticky, z-topbar) floats over it; content is padded back down. */
+  margin-top: calc(-56px - var(--space-4));
+  padding: calc(56px + var(--space-4) + clamp(var(--space-6), 4vw, 72px)) var(--space-6)
+    clamp(var(--space-9), 8vw, 104px);
 }
 /* Etched 44px grid — hero only. Faint, edge-faded so it never fights borders. */
 .sb-welcome__hero-grid {
@@ -424,21 +429,24 @@
 
 /* ── Hero status wall (Signal Bloom: full-bleed, flat, live DOM) ───────────── */
 .sb-welcome__wall-wrap {
+  /* A CONTAINED, centered card — not a full-bleed gray band. Stretches to the
+   * hero column's max-width, with the black ground showing on either side. */
   align-self: stretch;
   margin-top: clamp(var(--space-8), 6vw, 72px);
-  /* Full-bleed: escape the centered hero column to the viewport edges. */
-  margin-inline: calc(50% - 50vw);
-  /* Peek, don't dominate: cap the board so only the header + a few rows show
-   * before the fade — the noir "preview poking in" look, not a full-height wall
-   * that eats the sections below. All 12 rows stay in the DOM (live + a11y). */
+  /* Peek, don't dominate: cap so only the header + a few rows show before the
+   * fade — the noir "preview poking in" look, all 12 rows stay in the DOM. */
   max-height: clamp(210px, 32vh, 340px);
   overflow: hidden;
   -webkit-mask-image: linear-gradient(to bottom, #000 52%, transparent 96%);
   mask-image: linear-gradient(to bottom, #000 52%, transparent 96%);
 }
 .sb-welcome__wall {
-  background: var(--panel);
-  border-block: 1px solid var(--line);
+  max-width: var(--wc-maxw);
+  margin: 0 auto;
+  background: var(--welcome-panel, var(--panel));
+  border: 1px solid var(--welcome-hair-2, var(--line));
+  border-radius: 12px 12px 0 0;
+  box-shadow: var(--shadow-2);
   text-align: left;
 }
 .sb-welcome__wall-bar {
