@@ -1,0 +1,29 @@
+# Switchboard web on Fly — PUBLIC app. Non-root nginx serves the Vite SPA (built
+# in real-API mode) and reverse-proxies /api + /ws + /wh + /healthz to the private
+# switchboard-api app over flycast (see deploy/fly/nginx.fly.conf). This is the
+# only public URL; the SPA and its OIDC session cookie stay same-origin.
+#
+# Deploy from the REPO ROOT:  fly deploy -c deploy/fly/fly.web.toml
+app = "switchboard-web"
+primary_region = "iad"
+
+[build]
+  dockerfile = "deploy/fly/web.Dockerfile"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[http_service.checks]]
+  interval = "15s"
+  timeout = "3s"
+  grace_period = "10s"
+  method = "GET"
+  path = "/nginx-health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
