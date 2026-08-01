@@ -738,6 +738,33 @@
 .sb-welcome__act.is-flip .sb-welcome__act-visual {
   order: -1;
 }
+
+/* Section-level scroll reveal — each below-fold section rises + fades in once as
+ * it crosses the viewport (same law as the feature acts, applied whole-section).
+ * Kept separate from __act so the two never fight over the shared attribute. */
+.sb-welcome__rise {
+  transition:
+    opacity 520ms var(--ease-out),
+    transform 520ms var(--ease-out);
+  will-change: opacity, transform;
+}
+.sb-welcome__rise[data-reveal='out'] {
+  opacity: 0;
+  transform: translateY(18px);
+}
+.sb-welcome__rise[data-reveal='in'] {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sb-welcome__rise {
+    transition: none;
+  }
+  .sb-welcome__rise[data-reveal='out'] {
+    opacity: 1;
+    transform: none;
+  }
+}
 .sb-welcome__act-label {
   display: inline-flex;
   align-items: center;

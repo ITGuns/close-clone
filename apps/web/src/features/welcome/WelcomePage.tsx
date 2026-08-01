@@ -19,6 +19,7 @@ import { Faq } from './Faq.tsx';
 import { TrustLine } from './TrustLine.tsx';
 import { FooterCta } from './FooterCta.tsx';
 import { useIgnition } from './useIgnition.ts';
+import { useSmoothScroll } from './useSmoothScroll.ts';
 
 /*
  * Switchboard's front door at /welcome (unauthenticated). Both CTAs and the nav
@@ -28,6 +29,7 @@ import { useIgnition } from './useIgnition.ts';
  */
 export function WelcomePage(): JSX.Element {
   const ignition = useIgnition();
+  useSmoothScroll();
   return (
     <div className="sb-welcome">
       <a className="sb-welcome__skip" href="#welcome-main">

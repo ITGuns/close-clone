@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { JSX } from 'react';
 import { Link } from 'react-router-dom';
 import { PRICING, PRICING_TIERS } from './copy.ts';
+import { useReveal } from './useReveal.ts';
 
 /*
  * Per-seat pricing for a single-tenant, internal tool — a Team/Scale ladder plus
@@ -12,9 +13,16 @@ import { PRICING, PRICING_TIERS } from './copy.ts';
  */
 export function Pricing(): JSX.Element {
   const [annual, setAnnual] = useState(false);
+  const { ref, revealed } = useReveal<HTMLElement>();
 
   return (
-    <section id="welcome-pricing" className="sb-welcome__pricing" aria-label="Pricing">
+    <section
+      ref={ref}
+      id="welcome-pricing"
+      className="sb-welcome__pricing sb-welcome__rise"
+      data-reveal={revealed ? 'in' : 'out'}
+      aria-label="Pricing"
+    >
       <header className="sb-welcome__section-head">
         <p className="sb-welcome__eyebrow">{PRICING.eyebrow}</p>
         <h2 className="sb-welcome__section-title">{PRICING.title}</h2>
