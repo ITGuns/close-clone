@@ -668,14 +668,31 @@
     opacity: 0;
   }
 }
-.sb-welcome__hero[data-ignite='igniting'] .sb-welcome__wall-row {
+/* The wall rows build UNDER THE SCROLL (useScrollBuild → data-built): dim until
+ * the scroll reaches them, then the dot ignites and the row settles to full. The
+ * board comes online as you lean in. Reduced motion ⇒ every row lit, no motion. */
+.sb-welcome__wall-row {
+  opacity: 0.34;
   transition:
-    opacity 200ms var(--ease-out),
-    transform 200ms var(--ease-out);
-  transition-delay: calc(var(--dur-ignition) * 0.55 + var(--row-i, 0) * 18ms);
-  @starting-style {
-    opacity: 0;
-    transform: translateY(6px);
+    opacity var(--dur) var(--ease-out),
+    transform var(--dur) var(--ease-out);
+}
+.sb-welcome__wall-row[data-built] {
+  opacity: 1;
+}
+.sb-welcome__wall-row .sb-welcome__frame-dot {
+  transition: box-shadow var(--dur) var(--ease-out);
+}
+.sb-welcome__wall-row[data-built] .sb-welcome__frame-dot {
+  box-shadow: var(--lamp-glow);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sb-welcome__wall-row {
+    opacity: 1;
+    transition: none;
+  }
+  .sb-welcome__wall-row .sb-welcome__frame-dot {
+    box-shadow: var(--lamp-glow);
   }
 }
 

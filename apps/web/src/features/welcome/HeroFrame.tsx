@@ -2,6 +2,7 @@ import type { CSSProperties, JSX } from 'react';
 import { BoardMark } from './icons.tsx';
 import { WALL_ROWS } from './fixtures.ts';
 import { WALL, WORDMARK } from './copy.ts';
+import { useScrollBuild } from './useScrollBuild.ts';
 
 /*
  * The hero status wall (Signal Bloom): twelve live-DOM board rows, full-bleed
@@ -11,9 +12,10 @@ import { WALL, WORDMARK } from './copy.ts';
  * wall is aria-hidden. --row-i drives the CSS ignition stagger only.
  */
 export function HeroFrame(): JSX.Element {
+  const { ref, lit } = useScrollBuild<HTMLDivElement>(WALL_ROWS.length);
   return (
     <div className="sb-welcome__wall-wrap" aria-hidden="true">
-      <div className="sb-welcome__wall">
+      <div className="sb-welcome__wall" ref={ref}>
         <div className="sb-welcome__wall-bar">
           <span className="sb-welcome__frame-brand">
             <BoardMark size={13} />
@@ -27,6 +29,7 @@ export function HeroFrame(): JSX.Element {
             <li
               key={row.id}
               className="sb-welcome__wall-row"
+              data-built={i < lit || undefined}
               style={{ '--row-i': i } as CSSProperties}
             >
               <span className={`sb-welcome__frame-dot sb-welcome__frame-dot--${row.state}`} />
