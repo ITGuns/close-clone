@@ -186,7 +186,14 @@ describe('WelcomePage — all live DOM', () => {
 });
 
 describe('WelcomePage — ignition', () => {
-  test('a fresh, motion-allowed visit ignites the board once', () => {
+  // The page opts into replay-every-load under import.meta.env.DEV (true in the
+  // test runner). Pin these two to production to assert the play-once wiring.
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('a fresh, motion-allowed visit ignites the board once (production)', () => {
+    vi.stubEnv('DEV', false);
     stubReducedMotion(false);
     const { container } = renderWelcome();
     expect(hero(container)).toHaveAttribute('data-ignite', 'igniting');
@@ -194,13 +201,25 @@ describe('WelcomePage — ignition', () => {
     expect(sessionStorage.getItem(IGNITION_SESSION_KEY)).toBe('1');
   });
 
-  test('a second visit in the same session does not re-ignite (replay guard)', () => {
+  test('a second visit in the same session does not re-ignite (production replay guard)', () => {
+    vi.stubEnv('DEV', false);
     stubReducedMotion(false);
     const first = renderWelcome();
     expect(hero(first.container)).toHaveAttribute('data-ignite', 'igniting');
     cleanup();
     const second = renderWelcome();
     expect(hero(second.container)).toHaveAttribute('data-ignite', 'lit');
+  });
+
+  test('dev/demo mode re-ignites on every load and never burns the flag', () => {
+    vi.stubEnv('DEV', true);
+    stubReducedMotion(false);
+    const first = renderWelcome();
+    expect(hero(first.container)).toHaveAttribute('data-ignite', 'igniting');
+    expect(sessionStorage.getItem(IGNITION_SESSION_KEY)).toBeNull();
+    cleanup();
+    const second = renderWelcome();
+    expect(hero(second.container)).toHaveAttribute('data-ignite', 'igniting');
   });
 
   test('reduced motion collapses ignition to instant (lit, no replay flag)', () => {

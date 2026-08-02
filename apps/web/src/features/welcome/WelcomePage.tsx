@@ -8,6 +8,7 @@ import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import './welcome.css';
 
+import { useEffect } from 'react';
 import type { JSX } from 'react';
 import { WelcomeNav } from './WelcomeNav.tsx';
 import { Hero } from './Hero.tsx';
@@ -28,8 +29,24 @@ import { useSmoothScroll } from './useSmoothScroll.ts';
  * plays once per session and collapses to instant under reduced motion.
  */
 export function WelcomePage(): JSX.Element {
-  const ignition = useIgnition();
+  // Dev/demo: replay the whole entrance on every refresh — re-ignite the hero
+  // (ignore the once-per-session flag) and start each load at the top so the
+  // section reveals have room to play. Production keeps play-once: the hero
+  // ignites once per session and reloads keep their restored scroll, so a
+  // returning user isn't re-subjected to the intro.
+  const ignition = useIgnition({ replay: import.meta.env.DEV });
   useSmoothScroll();
+
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    // jsdom has no real scrolling; skip so tests stay quiet.
+    if (typeof navigator !== 'undefined' && navigator.userAgent.includes('jsdom')) return;
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+    window.scrollTo(0, 0);
+  }, []);
+
   return (
     <div className="sb-welcome">
       <a className="sb-welcome__skip" href="#welcome-main">
