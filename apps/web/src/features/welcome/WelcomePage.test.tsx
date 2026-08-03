@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 import type { RenderResult } from '@testing-library/react';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import * as axe from 'axe-core';
 import { AppProviders } from '../../app/AppProviders.tsx';
@@ -70,12 +70,15 @@ afterEach(cleanup);
 describe('WelcomePage — hero wall + nav menu + accounts band', () => {
   test('nav anchors point at real sections on the page', () => {
     const { container } = renderWelcome();
+    // Scope to the landing nav — the footer's Product column links share names.
+    const nav = screen.getByRole('navigation', { name: 'Landing' });
     for (const [name, target] of [
       ['Features', 'welcome-acts'],
       ['Shortcuts', 'welcome-keys'],
-      ['Compliance', 'welcome-trust'],
+      ['Pricing', 'welcome-pricing'],
+      ['FAQ', 'welcome-faq'],
     ] as const) {
-      const link = screen.getByRole('link', { name });
+      const link = within(nav).getByRole('link', { name });
       expect(link).toHaveAttribute('href', `#${target}`);
       expect(container.querySelector(`#${target}`)).not.toBeNull();
     }
@@ -141,7 +144,13 @@ describe('WelcomePage — route + content', () => {
     for (const link of openLinks) {
       expect(link).toHaveAttribute('href', '/login');
     }
-    expect(screen.getByRole('link', { name: /sign in · sso/i })).toHaveAttribute('href', '/login');
+    // Every "Sign in · SSO" CTA — nav plus the two per-seat pricing plans — routes
+    // to the same dev-login gate.
+    const signinLinks = screen.getAllByRole('link', { name: /sign in · sso/i });
+    expect(signinLinks).toHaveLength(3); // nav + Team + Scale
+    for (const link of signinLinks) {
+      expect(link).toHaveAttribute('href', '/login');
+    }
   });
 
   test('shows the six state lamps and the three feature acts', () => {
@@ -177,7 +186,14 @@ describe('WelcomePage — all live DOM', () => {
 });
 
 describe('WelcomePage — ignition', () => {
-  test('a fresh, motion-allowed visit ignites the board once', () => {
+  // The page opts into replay-every-load under import.meta.env.DEV (true in the
+  // test runner). Pin these two to production to assert the play-once wiring.
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  test('a fresh, motion-allowed visit ignites the board once (production)', () => {
+    vi.stubEnv('DEV', false);
     stubReducedMotion(false);
     const { container } = renderWelcome();
     expect(hero(container)).toHaveAttribute('data-ignite', 'igniting');
@@ -185,13 +201,25 @@ describe('WelcomePage — ignition', () => {
     expect(sessionStorage.getItem(IGNITION_SESSION_KEY)).toBe('1');
   });
 
-  test('a second visit in the same session does not re-ignite (replay guard)', () => {
+  test('a second visit in the same session does not re-ignite (production replay guard)', () => {
+    vi.stubEnv('DEV', false);
     stubReducedMotion(false);
     const first = renderWelcome();
     expect(hero(first.container)).toHaveAttribute('data-ignite', 'igniting');
     cleanup();
     const second = renderWelcome();
     expect(hero(second.container)).toHaveAttribute('data-ignite', 'lit');
+  });
+
+  test('dev/demo mode re-ignites on every load and never burns the flag', () => {
+    vi.stubEnv('DEV', true);
+    stubReducedMotion(false);
+    const first = renderWelcome();
+    expect(hero(first.container)).toHaveAttribute('data-ignite', 'igniting');
+    expect(sessionStorage.getItem(IGNITION_SESSION_KEY)).toBeNull();
+    cleanup();
+    const second = renderWelcome();
+    expect(hero(second.container)).toHaveAttribute('data-ignite', 'igniting');
   });
 
   test('reduced motion collapses ignition to instant (lit, no replay flag)', () => {

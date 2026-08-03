@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import { ACCOUNTS_BAND } from './copy.ts';
+import { useReveal } from './useReveal.ts';
 
 /*
  * The wordmark band under the hero — the logo-cloud slot, kept honest: these
@@ -8,8 +9,14 @@ import { ACCOUNTS_BAND } from './copy.ts';
  * DOM), achromatic, quiet.
  */
 export function AccountsBand(): JSX.Element {
+  const { ref, revealed } = useReveal<HTMLElement>();
   return (
-    <section className="sb-welcome__accounts" aria-label={ACCOUNTS_BAND.title}>
+    <section
+      ref={ref}
+      className="sb-welcome__accounts sb-welcome__rise"
+      data-reveal={revealed ? 'in' : 'out'}
+      aria-label={ACCOUNTS_BAND.title}
+    >
       <h2 className="sb-welcome__accounts-title">{ACCOUNTS_BAND.title}</h2>
       <ul className="sb-welcome__accounts-list">
         {ACCOUNTS_BAND.names.map((name) => (

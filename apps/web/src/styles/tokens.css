@@ -193,6 +193,16 @@
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.5);
   --shadow-2: 0 10px 30px -12px rgba(0, 0, 0, 0.7);
 
+  /* Landing "noir" ground — a deeper black for the /welcome front door only, so
+   * the marketing page reads as a distinct register from the dense operator app.
+   * Dark-committed; welcome.css falls back to --surface-* under light themes. */
+  --welcome-ground: #08090b;
+  --welcome-panel: #0d0f13;
+  --welcome-panel-2: #101319;
+  --welcome-hair: rgba(255, 255, 255, 0.07);
+  --welcome-hair-2: rgba(255, 255, 255, 0.11);
+  --welcome-hair-3: rgba(255, 255, 255, 0.16);
+
   /* ══ ALIAS layer (theme-independent; resolves against the active palette) ══
    * The primitives + shell reference these names; they forward to law tokens. */
   --surface-0: var(--bg);

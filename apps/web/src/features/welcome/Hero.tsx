@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { StateLamp } from './StateLamp.tsx';
 import { HeroFrame } from './HeroFrame.tsx';
 import { HERO_LAMPS } from './fixtures.ts';
-import { HERO, HERO_STATS, LOGIN_PATH } from './copy.ts';
+import { ANNOUNCE, HERO, HERO_STATS, LOGIN_PATH } from './copy.ts';
 import type { IgnitionState } from './useIgnition.ts';
 
 /*
@@ -21,6 +21,14 @@ export function Hero({ ignition }: { ignition: IgnitionState }): JSX.Element {
       <div className="sb-welcome__hero-grid" aria-hidden="true" />
       <div className="sb-welcome__hero-bloom" aria-hidden="true" />
       <div className="sb-welcome__hero-inner">
+        <a className="sb-welcome__announce" href={ANNOUNCE.href}>
+          <span className="sb-welcome__announce-dot" aria-hidden="true" />
+          {ANNOUNCE.text}
+          <span className="sb-welcome__announce-chev" aria-hidden="true">
+            ›
+          </span>
+        </a>
+
         <ul className="sb-welcome__lamps" aria-label="Lead states, at a glance">
           {HERO_LAMPS.map((lamp, i) => (
             <li key={lamp.key} className="sb-welcome__lamps-item">

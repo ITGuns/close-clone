@@ -4,6 +4,7 @@ import { readableCombo } from '../../keyboard/combo.ts';
 import { VisuallyHidden } from '../../ui/index.ts';
 import { WELCOME_SHORTCUT_GROUPS } from './shortcuts.ts';
 import { KEYBOARD } from './copy.ts';
+import { useReveal } from './useReveal.ts';
 
 /*
  * The app's real keyboard map, rendered as a design object. Combos come from
@@ -13,8 +14,15 @@ import { KEYBOARD } from './copy.ts';
  * reading of the combo (readableCombo), matching the cheat sheet's a11y shape.
  */
 export function KeyboardStrip(): JSX.Element {
+  const { ref, revealed } = useReveal<HTMLElement>();
   return (
-    <section id="welcome-keys" className="sb-welcome__keys" aria-label="Keyboard shortcuts">
+    <section
+      ref={ref}
+      id="welcome-keys"
+      className="sb-welcome__keys sb-welcome__rise"
+      data-reveal={revealed ? 'in' : 'out'}
+      aria-label="Keyboard shortcuts"
+    >
       <div className="sb-welcome__keys-intro">
         <p className="sb-welcome__eyebrow">{KEYBOARD.label}</p>
         <h2 className="sb-welcome__keys-title">{KEYBOARD.title}</h2>

@@ -59,22 +59,31 @@ export function decideIgnition(reducedMotion: boolean, alreadyIgnited: boolean):
   return reducedMotion || alreadyIgnited ? 'lit' : 'igniting';
 }
 
+export interface IgnitionOptions {
+  /**
+   * Dev/demo escape hatch: ignore the once-per-session flag so the hero
+   * re-ignites on every load, and don't burn the flag either (so toggling this
+   * back off restores play-once cleanly). Off in production.
+   */
+  replay?: boolean;
+}
+
 /**
  * Resolve the hero's ignition state for this mount and, when it will animate,
  * burn the once-per-session flag so any later mount renders `lit`. The state is
  * computed synchronously in the initializer so there is no unlit flash before
  * an effect runs.
  */
-export function useIgnition(): IgnitionState {
+export function useIgnition({ replay = false }: IgnitionOptions = {}): IgnitionState {
   const [state] = useState<IgnitionState>(() =>
-    decideIgnition(prefersReducedMotion(), hasIgnitedThisSession()),
+    decideIgnition(prefersReducedMotion(), replay ? false : hasIgnitedThisSession()),
   );
 
   useEffect(() => {
-    if (state === 'igniting') {
+    if (!replay && state === 'igniting') {
       markIgnitedThisSession();
     }
-  }, [state]);
+  }, [state, replay]);
 
   return state;
 }
